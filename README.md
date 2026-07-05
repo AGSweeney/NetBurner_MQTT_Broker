@@ -36,13 +36,14 @@ On NetBurner, `BrokerServerTask` drives the broker from one RTOS task using `sel
 
 ## Supported Platforms
 
-| Platform | Limits profile | Notes |
-|----------|----------------|-------|
-| **NANO54415** | `broker_limits_nano54415.hpp` | Default makefile target; primary reference hardware |
-| **SOMRT1061** | `broker_limits_somrt1061.hpp` | RT platform; EFFS mounted by platform library |
-| **MODM7AE70** | `broker_limits_modm7ae70.hpp` | Tighter RAM budget (fewer clients, smaller payload pool) |
-| **MODRT1171** | Uses SOMRT1061-style EFFS handling | Build with `PLATFORM=MODRT1171` |
-| **MOD5441X**, **SB800EX** | NANO54415 limits (via makefile flash layout) | ColdFire / alternate flash geometry |
+| Platform | Development kit | Limits profile | Notes |
+|----------|-----------------|----------------|-------|
+| **NANO54415** | [NANO54415 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/nano54415-development-kit/) | `broker_limits_nano54415.hpp` | Default makefile target; primary reference hardware |
+| **SOMRT1061** | [SOMRT1061 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/arm-embedded-iot-development-kit-somrt1061/) | `broker_limits_somrt1061.hpp` | RT platform; EFFS mounted by platform library |
+| **MODM7AE70** | [MODM7AE70 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/modm7ae70-development-kit/) | `broker_limits_modm7ae70.hpp` | Tighter RAM budget (fewer clients, smaller payload pool) |
+| **MODRT1171** | [MODRT1171 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/i-mx-rt1171-embedded-iot-development-kit-modrt1171/) | Uses SOMRT1061-style EFFS handling | Build with `PLATFORM=MODRT1171` |
+| **MOD5441X** | [MOD54415 LC Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/mod54415-lc-development-kit/) | NANO54415 limits (via makefile flash layout) | ColdFire platform; MOD54415 family |
+| **SB800EX** | [SB800 EX Development Kit](https://www.netburner.com/products/development-kit/serial-to-ethernet-dev-kits/sb800-ex-development-kit/) | NANO54415 limits (via makefile flash layout) | Serial-to-Ethernet platform; alternate flash geometry |
 
 Host unit tests use `MQTT_BROKER_HOST_LE` with limits aligned to NANO54415.
 
@@ -50,7 +51,8 @@ Host unit tests use `MQTT_BROKER_HOST_LE` with limits aligned to NANO54415.
 
 ### Firmware build
 
-- [NetBurner Network Development Kit (NNDK)](https://www.netburner.com/NNDK/) installed with `NNDK_ROOT` set
+- [NetBurner Network Development Kit (NNDK)](https://www.netburner.com/get-tools/) installed with `NNDK_ROOT` set
+- A supported NetBurner module (see [Supported Platforms](#supported-platforms) for development kit links)
 - NetBurner IDE or command-line `make` from the NNDK toolchain
 
 ### Host unit tests
@@ -193,6 +195,12 @@ The broker invokes a platform-supplied auth handler at CONNECT time; failed veri
 ## TLS / MQTTS
 
 MQTTS reuses the device HTTPS certificate managed by the NetBurner SSL service (user-installed, HAL auto-generated, or self-signed after NTP sync). Enable the TLS listener in broker settings once `SslCertReady()` is true. TLS client capacity is limited (`MaxTlsClients = 2` on reference platforms) due to handshake RAM cost on embedded targets.
+
+## Disclaimer
+
+This project is an independent open-source effort by Adam G. Sweeney. It is **not**
+affiliated with, endorsed by, or sponsored by NetBurner, Inc. "NetBurner" and
+related product names are trademarks of NetBurner, Inc.
 
 ## License
 
