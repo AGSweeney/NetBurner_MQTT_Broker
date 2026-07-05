@@ -3,6 +3,9 @@ libs/mqtt_broker/build/
 
 # NetBurner firmware build output
 platforms/netburner/nb-mqtt-broker/obj/
+platforms/netburner/libs/
+*.o
+*.d
 
 # Generated from html/ by comphtml (NetBurner make)
 platforms/netburner/nb-mqtt-broker/src/htmldata.cpp
