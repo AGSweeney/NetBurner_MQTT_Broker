@@ -54,9 +54,6 @@ endif
 ifeq ($(PLATFORM),MOD5441X)
 	COMPCODEFLAGS = 0xC0040000 0xC1F00000
 endif
-ifeq ($(PLATFORM),SB800EX)
-	COMPCODEFLAGS = 0x04000 0x700000
-endif
 
 ifeq ($(filter $(PLATFORM),SOMRT1061 MODRT1171),)
 	XTRALIB = $(NNDK_ROOT)/platform/$(PLATFORM)/original/lib/libStdFFile.a

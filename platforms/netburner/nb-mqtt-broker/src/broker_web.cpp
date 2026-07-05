@@ -15,8 +15,12 @@
 
 #if defined(PLATFORM_SOMRT1061) || defined(SOMRT1061)
 static const char *kPlatformName = "SOMRT1061";
+#elif defined(PLATFORM_MODRT1171) || defined(MODRT1171)
+static const char *kPlatformName = "MODRT1171";
 #elif defined(PLATFORM_MODM7AE70) || defined(MODM7AE70)
 static const char *kPlatformName = "MODM7AE70";
+#elif defined(PLATFORM_MOD5441X) || defined(MOD5441X)
+static const char *kPlatformName = "MOD5441X";
 #elif defined(PLATFORM_NANO54415) || defined(NANO54415)
 static const char *kPlatformName = "NANO54415";
 #else

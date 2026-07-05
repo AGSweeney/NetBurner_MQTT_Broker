@@ -38,7 +38,7 @@
 #include <time.h>
 #include <timezones.h>
 
-#if (!defined PK70 && !defined SBE70LC && !defined CB34EX && !defined NANO54415 && !defined MOD5441X && !defined MODM7AE70 && !defined SOMRT1061)
+#if (!defined PK70 && !defined SBE70LC && !defined CB34EX && !defined NANO54415 && !defined MOD5441X && !defined MODM7AE70 && !defined SOMRT1061 && !defined MODRT1171)
 #include "rtc.h"
 #endif
 
@@ -137,7 +137,7 @@ void SetTimeManual(int month, int day, int weekday, int year, int hour, int min,
 void SetTimeRTC()
 {
 /* Synchronize the RTC with the system time. */
-#if (!defined PK70 && !defined SBE70LC && !defined CB34EX && !defined NANO54415 && !defined MOD5441X && !defined MODM7AE70 && !defined SOMRT1061)
+#if (!defined PK70 && !defined SBE70LC && !defined CB34EX && !defined NANO54415 && !defined MOD5441X && !defined MODM7AE70 && !defined SOMRT1061 && !defined MODRT1171)
     int n = RTCSetSystemFromRTCTime();
 #else
     int n = 1;

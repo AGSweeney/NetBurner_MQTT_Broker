@@ -39,13 +39,23 @@ On NetBurner, `BrokerServerTask` drives the broker from one RTOS task using `sel
 | Platform | Development kit | Limits profile | Notes |
 |----------|-----------------|----------------|-------|
 | **NANO54415** | [NANO54415 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/nano54415-development-kit/) | `broker_limits_nano54415.hpp` | Default makefile target; primary reference hardware |
-| **SOMRT1061** | [SOMRT1061 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/arm-embedded-iot-development-kit-somrt1061/) | `broker_limits_somrt1061.hpp` | RT platform; EFFS mounted by platform library |
+| **SOMRT1061** | [SOMRT1061 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/arm-embedded-iot-development-kit-somrt1061/) | `broker_limits_somrt1061.hpp` | **Recommended** for new designs; dual Ethernet, validated on hardware |
 | **MODM7AE70** | [MODM7AE70 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/modm7ae70-development-kit/) | `broker_limits_modm7ae70.hpp` | Tighter RAM budget (fewer clients, smaller payload pool) |
-| **MODRT1171** | [MODRT1171 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/i-mx-rt1171-embedded-iot-development-kit-modrt1171/) | Uses SOMRT1061-style EFFS handling | Build with `PLATFORM=MODRT1171` |
-| **MOD5441X** | [MOD54415 LC Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/mod54415-lc-development-kit/) | NANO54415 limits (via makefile flash layout) | ColdFire platform; MOD54415 family |
-| **SB800EX** | [SB800 EX Development Kit](https://www.netburner.com/products/development-kit/serial-to-ethernet-dev-kits/sb800-ex-development-kit/) | NANO54415 limits (via makefile flash layout) | Serial-to-Ethernet platform; alternate flash geometry |
+| **MODRT1171** | [MODRT1171 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/i-mx-rt1171-embedded-iot-development-kit-modrt1171/) | `broker_limits_somrt1061.hpp` | **Recommended** for new designs; newest i.MX RT platform |
+| **MOD5441X** | [MOD54415 LC Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/mod54415-lc-development-kit/) | `broker_limits_nano54415.hpp` | ColdFire platform; legacy deployments |
 
 Host unit tests use `MQTT_BROKER_HOST_LE` with limits aligned to NANO54415.
+
+### Recommended platforms
+
+For **new projects**, start with one of the modern NXP i.MX RT modules:
+
+- **[SOMRT1061](https://www.netburner.com/products/development-kit/som-dev-kits/arm-embedded-iot-development-kit-somrt1061/)** — Best starting point. Dual 10/100 Ethernet, the highest broker capacity profile in this tree, and the platform used for on-device validation and sizing.
+- **[MODRT1171](https://www.netburner.com/products/development-kit/som-dev-kits/i-mx-rt1171-embedded-iot-development-kit-modrt1171/)** — Newest NetBurner RT kit (i.MX RT1171). Uses the same RT integration path and broker limits as SOMRT1061; prefer this when you want the latest hardware generation and headroom.
+
+**NANO54415** remains the default `make` target and the reference profile for host unit tests. It is well supported but ColdFire-based; choose it when you already deploy NANO54415 hardware rather than for greenfield designs.
+
+**MODM7AE70** and **MOD5441X** remain supported for existing installs or specific form-factor needs.
 
 ## Requirements
 
@@ -73,8 +83,10 @@ From the NetBurner application directory:
 cd platforms/netburner/nb-mqtt-broker
 make clean
 make                    # default PLATFORM=NANO54415
-make PLATFORM=SOMRT1061
+make PLATFORM=SOMRT1061 # recommended
+make PLATFORM=MODRT1171 # recommended (newest RT platform)
 make PLATFORM=MODM7AE70
+make PLATFORM=MOD5441X
 ```
 
 The makefile compiles the portable broker sources from `libs/mqtt_broker/` and generates `src/htmldata.cpp` from the files in `html/` via `comphtml`.
