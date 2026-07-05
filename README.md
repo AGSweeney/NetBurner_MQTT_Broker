@@ -196,4 +196,17 @@ MQTTS reuses the device HTTPS certificate managed by the NetBurner SSL service (
 
 ## License
 
-No license file is included in this repository. Contact the repository owner for licensing terms.
+Copyright (c) 2026 Adam G. Sweeney (agsweeney@gmail.com)
+
+Original code in this repository (primarily the portable MQTT broker under
+`libs/mqtt_broker/` and the NetBurner broker integration) is licensed under the
+[MIT License](LICENSE).
+
+**Third-party code is not covered by MIT.** Portions of the NetBurner firmware
+application were adapted from NetBurner NNDK examples (EFFS-STD file system,
+SSL/TLS bootstrap, and web admin UI). Those files retain NetBurner or HCC
+Embedded copyright notices and their original license terms. See
+[NOTICE](NOTICE) for a file-level breakdown.
+
+Building and running the firmware also requires the NetBurner NNDK, which is
+licensed separately by NetBurner, Inc.

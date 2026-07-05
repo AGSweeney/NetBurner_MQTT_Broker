@@ -1,0 +1,98 @@
+Third-Party and NetBurner NNDK Notices
+======================================
+
+This project combines original work by Adam G. Sweeney with material from the
+NetBurner Network Development Kit (NNDK) and its examples. Only the original
+portions are licensed under the MIT License (see LICENSE). The items below are
+not re-licensed under MIT and remain subject to their respective terms.
+
+
+Original Work (MIT License)
+---------------------------
+
+Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+
+Includes, among other material:
+
+  - libs/mqtt_broker/                     Portable MQTT 5 broker library
+  - platforms/netburner/nb-mqtt-broker/src/broker_*.cpp
+  - platforms/netburner/nb-mqtt-broker/src/broker_*.hpp
+  - platforms/netburner/nb-mqtt-broker/src/mqtt_auth_store.*
+  - platforms/netburner/nb-mqtt-broker/html/   Admin UI pages and styles
+  - platforms/netburner/scripts/             Device test and bench scripts
+  - README.md and project build metadata adapted for this application
+
+
+NetBurner NNDK Example Code (retain NetBurner copyright headers)
+-----------------------------------------------------------------
+
+The following files were taken from or based on NetBurner NNDK examples
+(primarily the EFFS-STD flash file system example under
+examples/_common/EFFS/STD/). Each file includes the NetBurner, Inc. copyright
+header and hardware-use license terms at the top of the source file.
+
+  platforms/netburner/nb-mqtt-broker/src/effs_std.cpp
+  platforms/netburner/nb-mqtt-broker/src/effs_std.h
+  platforms/netburner/nb-mqtt-broker/src/effs_time.cpp
+  platforms/netburner/nb-mqtt-broker/src/effs_time.h
+  platforms/netburner/nb-mqtt-broker/src/effsStdFlashDrv.cpp
+  platforms/netburner/nb-mqtt-broker/src/fs_main.cpp
+  platforms/netburner/nb-mqtt-broker/src/fs_main.h
+  platforms/netburner/nb-mqtt-broker/src/FileSystemUtils.cpp
+  platforms/netburner/nb-mqtt-broker/src/FileSystemUtils.h
+  platforms/netburner/nb-mqtt-broker/src/ramdrv_mcf.cpp
+  platforms/netburner/nb-mqtt-broker/src/http_f.h
+  platforms/netburner/nb-mqtt-broker/src/ftp_fs.cpp
+  platforms/netburner/nb-mqtt-broker/src/flashChip/MX25L6406E.h
+  platforms/netburner/nb-mqtt-broker/src/flashChip/MX29GL256F.h
+  platforms/netburner/nb-mqtt-broker/src/flashChip/SAME70Q21.h
+
+NetBurner example license summary (see file headers for full text):
+
+  Permission is granted to purchasers of NetBurner hardware to use or modify
+  these programs when the resultant program runs only on NetBurner-provided
+  hardware. Contact sales@netburner.com for licensing on other hardware.
+
+
+NetBurner NNDK Example Code (adapted — SSL and web admin)
+-----------------------------------------------------------
+
+The following files were adapted from NetBurner NNDK SSL and web configuration
+examples. Each file includes the NetBurner, Inc. copyright header and
+hardware-use license terms at the top of the source file. Substantial
+MQTT-broker-specific changes were made in this repository.
+
+  platforms/netburner/nb-mqtt-broker/src/ssluser.cpp
+  platforms/netburner/nb-mqtt-broker/src/ssluser.h
+  platforms/netburner/nb-mqtt-broker/src/ssl_service.cpp
+  platforms/netburner/nb-mqtt-broker/src/ssl_service.h
+  platforms/netburner/nb-mqtt-broker/src/ssl_config.h
+  platforms/netburner/nb-mqtt-broker/src/certificatekey.cpp
+  platforms/netburner/nb-mqtt-broker/src/nvsettings.cpp
+  platforms/netburner/nb-mqtt-broker/src/nvsettings.h
+  platforms/netburner/nb-mqtt-broker/src/webui_config.cpp
+  platforms/netburner/nb-mqtt-broker/src/webui_config.h
+  platforms/netburner/nb-mqtt-broker/src/webfunctions.cpp
+
+Use on NetBurner hardware is subject to the same NNDK example terms described
+above. Do not remove or replace NetBurner attribution when redistributing these
+files.
+
+
+HCC Embedded (via NetBurner FTP / file-system integration)
+----------------------------------------------------------
+
+  platforms/netburner/nb-mqtt-broker/src/effs_std.cpp
+  platforms/netburner/nb-mqtt-broker/src/ftp_fs.h
+
+Each file includes the HCC Embedded copyright header and license notice at the
+top of the source file.
+
+
+NetBurner NNDK Runtime (not included in this repository)
+--------------------------------------------------------
+
+Firmware builds link against libraries and headers installed with the NetBurner
+NNDK (TCP/IP stack, RTOS, crypto/SSL, HTTP server, config_server, and related
+APIs). Those components are supplied by NetBurner, Inc. under the NNDK license
+agreement accepted when installing the NNDK.
