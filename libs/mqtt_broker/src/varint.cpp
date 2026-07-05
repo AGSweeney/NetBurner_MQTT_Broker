@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // varint.hpp implementation — Variable Byte Integer per MQTT 5 §1.5.5.
 
 #include "mqtt_broker/varint.hpp"

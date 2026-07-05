@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // MQTT 5 property validation (§2.2): allowed IDs per packet type, UTF-8 well-formedness,
 // single-occurrence rules, and wire parsing into PropertyPool. Returns ok=false with a
 // ReasonCode suitable for CONNACK/SUBACK/DISCONNECT (§2.4).

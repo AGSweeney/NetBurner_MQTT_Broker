@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Quick MQTT 5 conformance checks against the live broker:
 // 1. UNSUBSCRIBE gets an UNSUBACK and stops delivery.
 // 2. Zero-length retained payload deletes the retained message.

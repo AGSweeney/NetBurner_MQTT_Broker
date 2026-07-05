@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Live interop: retained QoS 1 wills, DISCONNECT 0x04/0x00, birth/death/state lifecycle.
 const mqtt = require('mqtt');
 const HOST = process.argv[2] || '172.16.82.8';

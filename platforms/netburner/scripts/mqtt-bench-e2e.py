@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+# SPDX-License-Identifier: MIT
+
 #!/usr/bin/env python3
 """End-to-end MQTT publish + subscribe throughput benchmark."""
 

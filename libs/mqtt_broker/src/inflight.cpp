@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Per-session inflight table operations and Receive Maximum clamping.
 
 #include "mqtt_broker/inflight.hpp"

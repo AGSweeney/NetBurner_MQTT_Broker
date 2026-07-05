@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Redirect MSVC debug CRT asserts/errors to stderr (no Windows popup dialogs).
 // Linked into every host test executable via mqtt_test_support.
 

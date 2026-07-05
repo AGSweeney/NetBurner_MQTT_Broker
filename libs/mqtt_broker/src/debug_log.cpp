@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // debug_log.hpp implementation — optional printf-style broker trace output.
 
 #include "mqtt_broker/debug_log.hpp"

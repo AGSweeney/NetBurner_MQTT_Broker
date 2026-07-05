@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Maps ReasonCode outcomes from validation and parsing to broker actions: whether to
 // disconnect the client and whether to publish the will message (§3.14.2).
 

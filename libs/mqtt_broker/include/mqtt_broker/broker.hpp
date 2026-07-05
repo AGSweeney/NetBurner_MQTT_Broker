@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #ifndef MQTT_BROKER_BROKER_HPP
 #define MQTT_BROKER_BROKER_HPP
 

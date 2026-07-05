@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Ref-counted PUBLISH payload storage backed by a fixed block pool. Payloads
 // chain across blocks so retained messages, inflight QoS deliveries, and offline
 // queues share memory without per-message heap allocation. Forwardable PUBLISH

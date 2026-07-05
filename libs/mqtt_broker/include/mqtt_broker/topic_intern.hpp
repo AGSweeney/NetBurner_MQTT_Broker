@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Topic string interning pool. Deduplicates topic/filter names into a fixed
 // blob so subscriptions, retained entries, and inflight queues share one copy
 // per distinct topic. Handles carry a generation counter so stale references

@@ -18,9 +18,12 @@ Includes, among other material:
   - platforms/netburner/nb-mqtt-broker/src/broker_*.cpp
   - platforms/netburner/nb-mqtt-broker/src/broker_*.hpp
   - platforms/netburner/nb-mqtt-broker/src/mqtt_auth_store.*
+  - platforms/netburner/nb-mqtt-broker/src/main.cpp
   - platforms/netburner/nb-mqtt-broker/html/   Admin UI pages and styles
   - platforms/netburner/scripts/             Device test and bench scripts
   - README.md and project build metadata adapted for this application
+
+These files include an MIT SPDX header at the top of each source file.
 
 
 NetBurner NNDK Example Code (retain NetBurner copyright headers)

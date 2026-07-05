@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Parsed MQTT 5 property sets for inbound packets (CONNECT, PUBLISH, etc.).
 // Each PropertyHandle owns a fixed slice of PropertyRecord entries plus offsets
 // into a shared append-only blob arena. The parser builds properties here;

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #include "mqtt_broker/offline_queue.hpp"
 
 // Fixed-capacity ring buffer backing store for offline session deliveries.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Per-session QoS 1/2 inflight tracking: outbound PUBLISH/PUBREL exchange state
 // and inbound QoS 2 dedup while awaiting PUBREL. Fixed-size tables sized by
 // BrokerLimits::QosInflightPerClient (MQTT-5.0 §4.4, §4.3.3).

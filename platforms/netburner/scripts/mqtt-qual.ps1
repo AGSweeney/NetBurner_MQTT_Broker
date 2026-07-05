@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+# SPDX-License-Identifier: MIT
+
 # Phase 2 abbreviated device qualification for nb-mqtt-broker.
 param(
     [string]$BrokerHost = '172.16.82.52',

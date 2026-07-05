@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+# SPDX-License-Identifier: MIT
+
 # Publish a burst of MQTT 5 QoS0 test messages for client verification.
 param(
     [string]$BrokerHost = '172.16.82.55',

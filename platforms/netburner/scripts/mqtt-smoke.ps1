@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+# SPDX-License-Identifier: MIT
+
 # Minimal MQTT 5 QoS0 smoke test against nb-mqtt-broker on port 1883.
 param(
     [string]$BrokerHost = '172.16.82.52',

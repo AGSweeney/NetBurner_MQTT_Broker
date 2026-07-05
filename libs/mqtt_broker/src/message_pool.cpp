@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // MessagePool implementation — block-chained payload arena with generation-
 // stamped ref-counted slots. Blocks are recycled through an intrusive free list;
 // slot generation increments on final release so stale handles fail msg_valid().

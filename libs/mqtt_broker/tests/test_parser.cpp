@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #include "mqtt_broker/message_pool.hpp"
 #include "mqtt_broker/mqtt_types.hpp"
 #include "mqtt_broker/parser.hpp"

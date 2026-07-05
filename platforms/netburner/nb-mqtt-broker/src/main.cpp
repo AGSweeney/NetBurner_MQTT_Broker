@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // NetBurner application entry point. Brings up network, SSL, the admin web
 // server, and the MQTT broker task. Runs indefinitely after startup.
 

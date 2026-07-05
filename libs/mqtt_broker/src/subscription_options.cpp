@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // SUBSCRIBE option validation and per-subscriber delivery plan merging.
 
 #include "mqtt_broker/subscription_options.hpp"

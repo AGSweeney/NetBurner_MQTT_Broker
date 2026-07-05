@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // MQTT 5 property parsing and validation — wire decode into PropertyPool plus
 // post-parse rule checks (allowlist, duplicates, UTF-8, numeric constraints).
 

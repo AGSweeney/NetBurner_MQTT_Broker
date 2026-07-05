@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // wire.hpp implementation — big-endian scalars and UTF-8 Encoded Strings (§1.5).
 
 #include "mqtt_broker/wire.hpp"

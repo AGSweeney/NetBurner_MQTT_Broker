@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Live checks for MQTT CONNECT authentication (Phase 7).
 const mqtt = require('mqtt');
 const HOST = process.argv[2] || '172.16.82.8';

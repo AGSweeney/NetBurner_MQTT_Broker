@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Fixed-capacity retained message store (MQTT 5 §3.3.1.3). One entry per topic
 // name; PUBLISH with RETAIN=1 upserts, zero-length payload deletes. Payload
 // bytes and topic strings are owned via MessagePool and TopicInternPool ref

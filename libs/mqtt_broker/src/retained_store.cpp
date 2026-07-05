@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // RetainedStore implementation — upsert/delete by topic with MessagePool and
 // TopicInternPool ref ownership; in-place replace reuses the topic handle.
 

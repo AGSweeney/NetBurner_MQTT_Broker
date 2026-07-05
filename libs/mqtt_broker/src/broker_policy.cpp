@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Process-wide broker policy and optional CONNECT auth hook. Defaults come from
 // BrokerLimits; platforms may override via broker_set_policy() / broker_set_auth_handler().
 

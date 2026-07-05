@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Live Sparkplug B lifecycle against the device broker. Payloads are binary
 // Buffers with embedded zero bytes; the broker stays payload-agnostic.
 const mqtt = require('mqtt');

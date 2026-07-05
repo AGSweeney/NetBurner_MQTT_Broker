@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // TopicInternPool implementation — deduplicated topic strings in a shared blob
 // arena with ref-counted TopicHandle slots and generation invalidation on release.
 

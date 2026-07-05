@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+# SPDX-License-Identifier: MIT
+
 # Host test runner: no Windows assert popups, stale-process cleanup, full stderr capture.
 $ErrorActionPreference = 'Stop'
 $BuildDir = Join-Path $PSScriptRoot '..' 'build'

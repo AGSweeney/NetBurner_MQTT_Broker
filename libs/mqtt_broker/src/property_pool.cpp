@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // PropertyPool implementation — slot-partitioned records over an append-only
 // blob arena. Values are stored in MQTT wire byte order so encode can re-serialize
 // without re-parsing. Blob space is not reclaimed on release; broker lifetime

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // ReasonCode → disconnect/will policy for parser and packet handlers.
 // Graceful client DISCONNECT will policy (reason 0x04 only) lives in broker.cpp.
 

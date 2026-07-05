@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Live MQTTS checks against nb-mqtt-broker on port 8883.
 // Assumes MQTTS is enabled in broker config (admin UI or persisted settings).
 const mqtt = require('mqtt');

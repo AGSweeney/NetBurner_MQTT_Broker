@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #ifndef MQTT_AUTH_STORE_H
 #define MQTT_AUTH_STORE_H
 

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #ifndef BROKER_SERVER_HPP
 #define BROKER_SERVER_HPP
 

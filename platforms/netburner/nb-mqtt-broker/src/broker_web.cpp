@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // JSON status endpoint for the admin dashboard. Exposes broker metrics,
 // listener state, compile-time limits, and the detected NetBurner platform.
 

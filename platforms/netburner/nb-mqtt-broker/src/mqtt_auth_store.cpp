@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // NetBurner EFFS-backed MQTT credential store. Keeps an in-memory user table
 // synchronized with the "MQTTUSERS" flash file; mutations delete-then-rewrite
 // the whole file under a critical section.

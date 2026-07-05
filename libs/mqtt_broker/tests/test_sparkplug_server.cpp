@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Sparkplug B MQTT 5 server conformance tests.
 //
 // Exercises the MQTT 5 behaviors Sparkplug 3.0 relies on: DISCONNECT 0x04

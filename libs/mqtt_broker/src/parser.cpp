@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #include "mqtt_broker/parser.hpp"
 
 #include "mqtt_broker/connack_caps.hpp"

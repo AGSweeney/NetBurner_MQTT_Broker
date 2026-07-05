@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // MQTT 5 SUBSCRIBE option bits and fan-out delivery planning. Overlapping
 // filters for one subscriber session are merged here before enqueue
 // (MQTT-5.0 §3.8.3, §3.3.1.3).

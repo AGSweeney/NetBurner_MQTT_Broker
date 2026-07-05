@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Adam G. Sweeney <agsweeney@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #include "mqtt_broker/encode.hpp"
 
 // MQTT 5 outbound packet builders. PUBLISH uses windowed encoding so the TX
