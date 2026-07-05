@@ -1,0 +1,28 @@
+# Host unit-test build (CMake / MSVC)
+libs/mqtt_broker/build/
+
+# NetBurner firmware build output
+platforms/netburner/nb-mqtt-broker/obj/
+
+# Generated from html/ by comphtml (NetBurner make)
+platforms/netburner/nb-mqtt-broker/src/htmldata.cpp
+
+# Node device-test dependencies (run npm install in platforms/netburner/scripts)
+platforms/netburner/scripts/node_modules/
+
+# IDE / editor
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# OS / editor temp
+Thumbs.db
+Desktop.ini
+*.tmp
+*.log
+
+# Preserve published firmware images
+!dist/Firmware_Images/
+!dist/Firmware_Images/**

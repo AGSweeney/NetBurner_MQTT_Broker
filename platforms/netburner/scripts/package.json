@@ -1,0 +1,8 @@
+{
+  "name": "nb-mqtt-broker-device-tests",
+  "private": true,
+  "description": "Node.js device verification scripts for nb-mqtt-broker (requires npm install in this folder)",
+  "dependencies": {
+    "mqtt": "^5.10.0"
+  }
+}

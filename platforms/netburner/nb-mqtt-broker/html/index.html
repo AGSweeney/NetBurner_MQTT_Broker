@@ -1,0 +1,946 @@
+<!--ACCESSGROUP 1-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>NetBurner MQTT Broker Admin</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nb-header">
+  <div class="nb-header-inner">
+    <a href="https://www.netburner.com" rel="external">
+      <img src="logo.png" alt="NetBurner">
+    </a>
+    <div class="divider"></div>
+    <h1>MQTT Broker Admin</h1>
+    <span class="meta" id="headerMeta">Loading&hellip;</span>
+  </div>
+</header>
+
+<nav class="nb-tabs" aria-label="Admin sections">
+  <div class="nb-tabs-inner">
+    <button type="button" class="nb-tab nb-tab-active" data-tab="dashboard">Dashboard</button>
+    <button type="button" class="nb-tab" data-tab="broker">Broker</button>
+    <button type="button" class="nb-tab" data-tab="security">Security</button>
+    <button type="button" class="nb-tab" data-tab="network">Network</button>
+  </div>
+</nav>
+
+<main class="nb-page">
+
+  <section class="nb-tab-panel nb-tab-panel-active" id="tab-dashboard" data-panel="dashboard">
+    <p class="nb-eyebrow">Live Dashboard</p>
+    <h2>Broker status and compile-time limits.</h2>
+    <p>
+      Metrics refresh every two seconds from <span class="nb-mono">GET /api/broker/status</span>.
+      Platform limits are read-only values baked into firmware at build time.
+    </p>
+
+    <div class="nb-card">
+      <div class="nb-card-header">Broker Status</div>
+      <div class="nb-grid-3" id="statusTiles">
+        <div><strong>Clients</strong><div id="statClients">&mdash;</div></div>
+        <div><strong>Publish RX / TX</strong><div id="statPublish">&mdash;</div></div>
+        <div><strong>Listeners</strong><div id="statListener">&mdash;</div></div>
+      </div>
+      <p style="margin-top:16px; margin-bottom:0;">
+        <span class="nb-status nb-status-info" id="statusPill">Refreshing</span>
+        <span style="margin-left:10px; color:var(--nb-gray-500); font-size:13px;" id="statusDetail"></span>
+      </p>
+    </div>
+
+    <div class="nb-card">
+      <div class="nb-card-header">Platform Limits (read-only)</div>
+      <table class="nb-spec-table">
+        <thead><tr><th>Limit</th><th>Value</th></tr></thead>
+        <tbody id="limitsBody"><tr><td colspan="2">Loading&hellip;</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="nb-tab-panel" id="tab-broker" data-panel="broker" hidden>
+    <p class="nb-eyebrow">Configuration</p>
+    <h2>MQTT listeners, session policy, and client authentication.</h2>
+    <p>
+      Plain TCP and MQTTS share the same broker core. MQTTS uses the device HTTPS certificate.
+    </p>
+
+    <div class="nb-card">
+      <div class="nb-card-header">Broker Settings</div>
+      <div id="appContent">Loading&hellip;</div>
+      <div style="display:flex; gap:10px; padding-top:18px; align-items:center;">
+        <button class="nb-btn nb-btn-primary" type="button" id="brokerSaveBtn">Update Broker</button>
+        <span class="nb-status" data-status="Config/AppData">Ready</span>
+      </div>
+    </div>
+
+    <div class="nb-card">
+      <div class="nb-card-header">MQTT Client Authentication</div>
+      <p class="nb-help" style="margin-bottom:14px;">
+        Username/password for MQTT clients (CONNECT credentials). Passwords are stored salted and hashed on the device file system. Changes apply immediately — no reboot needed.
+      </p>
+      <div class="nb-form-row">
+        <label for="mqttAuthRequired">Require authentication</label>
+        <div>
+          <select id="mqttAuthRequired">
+            <option value="false">Disabled (open broker)</option>
+            <option value="true">Enabled</option>
+          </select>
+          <span class="nb-help">When enabled, clients must present valid credentials at CONNECT.</span>
+        </div>
+      </div>
+      <div class="nb-form-row">
+        <label for="mqttAllowAnon">Allow anonymous clients</label>
+        <div>
+          <select id="mqttAllowAnon">
+            <option value="false">Disabled</option>
+            <option value="true">Enabled</option>
+          </select>
+          <span class="nb-help">When authentication is required, still admit clients that send no username.</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; padding:4px 0 16px; align-items:center;">
+        <button class="nb-btn nb-btn-primary" type="button" id="mqttAuthSettingsBtn">Update Auth Settings</button>
+        <span class="nb-status" id="mqttAuthStatus">Ready</span>
+      </div>
+
+      <h4>Users</h4>
+      <table class="nb-spec-table" style="margin-bottom:14px;">
+        <thead><tr><th>Username</th><th style="width:110px;">Action</th></tr></thead>
+        <tbody id="mqttUsersBody"><tr><td colspan="2">Loading&hellip;</td></tr></tbody>
+      </table>
+      <div class="nb-form-row">
+        <label for="mqttNewUser">Username</label>
+        <div><input id="mqttNewUser" type="text" maxlength="31" autocomplete="off"></div>
+      </div>
+      <div class="nb-form-row">
+        <label for="mqttNewPass">Password</label>
+        <div>
+          <input id="mqttNewPass" type="password" maxlength="63" autocomplete="new-password">
+          <span class="nb-help">Adding an existing username replaces its password.</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; padding-top:8px; align-items:center;">
+        <button class="nb-btn nb-btn-outline" type="button" id="mqttAddUserBtn">Add / Update User</button>
+        <span class="nb-status" id="mqttUserStatus">Ready</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="nb-tab-panel" id="tab-security" data-panel="security" hidden>
+    <p class="nb-eyebrow">Web &amp; TLS</p>
+    <h2>HTTPS admin UI and server certificates.</h2>
+    <p>
+      The same certificate secures HTTPS (port 443) and MQTTS when enabled on the Broker tab.
+    </p>
+
+    <div class="nb-card">
+      <div class="nb-card-header">Admin Authentication</div>
+      <p class="nb-help" style="margin-bottom:14px;">
+        Uses HTTP Basic Auth (browser login prompt). Username is always <span class="nb-mono">admin</span> when a password is set.
+      </p>
+      <div class="nb-form-row">
+        <label for="adminUsername">Username</label>
+        <div>
+          <input id="adminUsername" type="text" value="admin" readonly>
+          <span class="nb-help">Fixed when password protection is enabled.</span>
+        </div>
+      </div>
+      <div class="nb-form-row">
+        <label for="oldPassword">Current password</label>
+        <div>
+          <input id="oldPassword" type="password" autocomplete="current-password">
+          <span class="nb-help">Required when changing an existing password.</span>
+        </div>
+      </div>
+      <div class="nb-form-row">
+        <label for="newPassword">New password</label>
+        <div>
+          <input id="newPassword" type="password" autocomplete="new-password">
+          <span class="nb-help">Leave blank to disable password protection.</span>
+        </div>
+      </div>
+      <div class="nb-form-row">
+        <label for="repeatPassword">Repeat new password</label>
+        <div>
+          <input id="repeatPassword" type="password" autocomplete="new-password">
+        </div>
+      </div>
+      <div class="nb-form-row">
+        <label for="requireAuthForAll">Password-protect all pages</label>
+        <div>
+          <select id="requireAuthForAll">
+            <option value="false">Disabled</option>
+            <option value="true">Enabled</option>
+          </select>
+          <span class="nb-help">When enabled, Dashboard and status APIs also require login (not just config changes).</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; padding-top:8px; align-items:center;">
+        <button class="nb-btn nb-btn-primary" type="button" id="securitySaveBtn">Update Security</button>
+        <span class="nb-status" id="securityAuthStatus">Ready</span>
+      </div>
+    </div>
+
+    <div class="nb-card">
+      <div class="nb-card-header">SSL / HTTPS</div>
+      <div id="https-service-status" class="nb-ssl-banner">Loading SSL status&hellip;</div>
+      <div class="nb-form-row">
+        <label for="httpsEnabled">HTTPS (port 443)</label>
+        <div>
+          <select id="httpsEnabled">
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
+          </select>
+          <span class="nb-help">Encrypted admin UI. Takes effect after reboot.</span>
+        </div>
+      </div>
+      <div class="nb-form-row">
+        <label for="httpEnabled">HTTP (port 80)</label>
+        <div>
+          <select id="httpEnabled">
+            <option value="true">Enabled</option>
+            <option value="false">Disabled</option>
+          </select>
+          <span class="nb-help">Plain HTTP admin UI. Takes effect after reboot.</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; padding-top:8px; align-items:center;">
+        <button class="nb-btn nb-btn-outline" type="button" id="sslProtocolsSaveBtn">Update Web Protocols</button>
+        <span class="nb-status" id="sslProtocolsStatus">Ready</span>
+      </div>
+      <p class="nb-help" style="margin-top:10px; margin-bottom:0;">Web protocol changes take effect after reboot. Use Update Security above for password settings.</p>
+    </div>
+
+    <div class="nb-card">
+      <div class="nb-card-header">Certificates</div>
+      <div id="regenerate-section" hidden>
+        <h4>Auto-generated certificate</h4>
+        <p class="nb-help" style="margin-bottom:12px;">
+          Generate a new self-signed certificate using the current device IP and settings.
+        </p>
+        <button class="nb-btn nb-btn-outline" type="button" id="regenerateCertBtn">Regenerate Certificate</button>
+      </div>
+      <h4>Custom certificate</h4>
+      <div class="nb-form-row">
+        <label for="certFile">Certificate</label>
+        <div><input type="file" id="certFile" accept=".crt,.pem"></div>
+      </div>
+      <div class="nb-form-row">
+        <label for="keyFile">Private key</label>
+        <div><input type="file" id="keyFile" accept=".key,.pem"></div>
+      </div>
+      <p class="nb-help">PEM format. RSA 512–4096 bit or ECDSA prime256v1. Certificate and key must match.</p>
+      <div style="display:flex; gap:10px; padding-top:8px; align-items:center;">
+        <button class="nb-btn nb-btn-primary" type="button" id="installCertBtn">Upload Certificate</button>
+        <span class="nb-status" id="sslCertStatus">Ready</span>
+      </div>
+      <div id="reset-section" hidden style="margin-top:18px; padding-top:18px; border-top:1px solid var(--nb-gray-200);">
+        <p class="nb-help" style="margin-bottom:12px;">
+          Remove the user-installed certificate. A new self-signed certificate will be generated on the next reboot.
+        </p>
+        <button class="nb-btn nb-btn-outline" type="button" id="resetCertBtn">Reset to Auto-Generated</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="nb-tab-panel" id="tab-network" data-panel="network" hidden>
+    <p class="nb-eyebrow">Network</p>
+    <h2>Interface addressing.</h2>
+    <p>
+      Configure each interface as DHCP or static IPv4
+      (<span class="nb-mono">Config/Sys/NetIf</span>). DHCP shows assigned address only; static mode shows editable fields.
+    </p>
+
+    <div class="nb-card">
+      <div class="nb-card-header">Network Config</div>
+      <div id="networkContent">Loading&hellip;</div>
+      <div style="display:flex; gap:10px; padding-top:18px; align-items:center;">
+        <button class="nb-btn nb-btn-primary" type="button" id="networkSaveBtn">Update Network</button>
+        <span class="nb-status" data-status="Config/Sys/NetIf">Ready</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="nb-footer">
+  <span>NetBurner MQTT Broker</span>
+  <a href="https://www.netburner.com">netburner.com</a>
+</footer>
+
+<script>
+var APPDATA_URL = "Config/AppData";
+var NETIF_URL = "Config/Sys/NetIf";
+
+var appData = null;
+var netIfData = null;
+var sslConfig = {};
+var sslStatusInitialized = false;
+var sslRefreshTimer = null;
+var statusTimer = null;
+
+function escAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function escText(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function activateTab(tabId) {
+  document.querySelectorAll(".nb-tab").forEach(function (btn) {
+    btn.classList.toggle("nb-tab-active", btn.getAttribute("data-tab") === tabId);
+  });
+  document.querySelectorAll(".nb-tab-panel").forEach(function (panel) {
+    var active = panel.getAttribute("data-panel") === tabId;
+    panel.hidden = !active;
+    panel.classList.toggle("nb-tab-panel-active", active);
+  });
+  if (window.location.hash !== "#" + tabId) {
+    history.replaceState(null, "", "#" + tabId);
+  }
+}
+
+function initTabs() {
+  document.querySelectorAll(".nb-tab").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      activateTab(btn.getAttribute("data-tab"));
+    });
+  });
+  var initial = (window.location.hash || "#dashboard").replace("#", "");
+  if (!document.querySelector("[data-panel='" + initial + "']")) {
+    initial = "dashboard";
+  }
+  activateTab(initial);
+}
+
+function isInterfaceBlock(val) {
+  return val && typeof val === "object" && val.IPv4 && typeof val.IPv4 === "object";
+}
+
+function simplifiedIpv4Mode(mode) {
+  if (mode === "Static") return "Static";
+  if (mode === "Disabled") return "Disabled";
+  return "DHCP";
+}
+
+function ipv4ModeFromUi(uiMode) {
+  if (uiMode === "Static") return "Static";
+  if (uiMode === "Disabled") return "Disabled";
+  return "DHCP";
+}
+
+function formRow(label, id, value, readOnly, inputType, help) {
+  var ro = readOnly ? " readonly" : "";
+  var type = inputType || "text";
+  var helpHtml = help ? "<span class='nb-help'>" + escText(help) + "</span>" : "";
+  return "<div class='nb-form-row'><label for='" + escAttr(id) + "'>" + escText(label) +
+         "</label><div><input id='" + escAttr(id) + "' type='" + type +
+         "' value=\"" + escAttr(value) + "\"" + ro + ">" + helpHtml + "</div></div>";
+}
+
+function formSelectRow(label, id, options, value, help) {
+  var helpHtml = help ? "<span class='nb-help'>" + escText(help) + "</span>" : "";
+  var html = "<div class='nb-form-row'><label for='" + escAttr(id) + "'>" + escText(label) + "</label><div>";
+  html += "<select id='" + escAttr(id) + "'>";
+  options.forEach(function (opt) {
+    var sel = (String(opt.value) === String(value)) ? " selected='selected'" : "";
+    html += "<option value='" + escAttr(opt.value) + "'" + sel + ">" + escText(opt.label) + "</option>";
+  });
+  html += "</select>" + helpHtml + "</div></div>";
+  return html;
+}
+
+function renderBrokerUI(data) {
+  var app = data.AppData || data;
+  var listener = app.BrokerListener || {};
+  var policy = app.BrokerSessionPolicy || {};
+  var plainEnabled = listener.PlainTcpEnabled === true || listener.PlainTcpEnabled === "true";
+  var tlsEnabled = listener.TlsEnabled === true || listener.TlsEnabled === "true";
+  var html = [];
+
+  html.push("<div class='nb-broker-section'>");
+  html.push("<h3>Plain TCP (MQTT)</h3>");
+  html.push(formSelectRow("Enable plain TCP", "broker_plain_enabled", [
+    { value: "true", label: "Enabled" },
+    { value: "false", label: "Disabled" }
+  ], plainEnabled ? "true" : "false",
+    "Accept unencrypted MQTT connections on the port below."));
+  html.push(formRow("TCP port", "broker_plain_port", listener.PlainTcpPort || 1883, false, "number",
+    "Default 1883. No TLS on this port."));
+  html.push("</div>");
+
+  html.push("<div class='nb-broker-section'>");
+  html.push("<h3>MQTTS (TLS)</h3>");
+  html.push(formSelectRow("Enable MQTTS", "broker_tls_enabled", [
+    { value: "true", label: "Enabled" },
+    { value: "false", label: "Disabled" }
+  ], tlsEnabled ? "true" : "false",
+    "Requires a server certificate (same cert as HTTPS)."));
+  html.push(formRow("TLS port", "broker_tls_port", listener.TlsPort || 8883, false, "number",
+    "Default 8883. Clients must trust the device certificate."));
+  html.push("</div>");
+
+  html.push("<div class='nb-broker-section'>");
+  html.push("<h3>Session Policy</h3>");
+  html.push(formRow("Max keep-alive (sec)", "broker_max_keepalive", policy.MaxKeepAliveSec || 30, false, "number",
+    "Upper limit negotiated with each client."));
+  html.push(formRow("Connect timeout (sec)", "broker_connect_timeout", policy.ConnectHandshakeTimeoutSec || 15, false, "number",
+    "Disconnect if CONNECT is not completed in time."));
+  html.push("</div>");
+
+  return html.join("");
+}
+
+function wireBrokerControls() {
+  var plainPortEl = document.getElementById("broker_plain_port");
+  var plainEnabledEl = document.getElementById("broker_plain_enabled");
+  var tlsPortEl = document.getElementById("broker_tls_port");
+  var tlsEnabledEl = document.getElementById("broker_tls_enabled");
+  if (!plainPortEl || !plainEnabledEl || !tlsPortEl || !tlsEnabledEl) return;
+
+  plainPortEl.min = 1;
+  plainPortEl.max = 65535;
+  tlsPortEl.min = 1;
+  tlsPortEl.max = 65535;
+  document.getElementById("broker_max_keepalive").min = 1;
+  document.getElementById("broker_max_keepalive").max = 3600;
+  document.getElementById("broker_connect_timeout").min = 1;
+  document.getElementById("broker_connect_timeout").max = 120;
+
+  function syncPortFields() {
+    plainPortEl.disabled = (plainEnabledEl.value !== "true");
+    tlsPortEl.disabled = (tlsEnabledEl.value !== "true");
+  }
+  plainEnabledEl.addEventListener("change", syncPortFields);
+  tlsEnabledEl.addEventListener("change", syncPortFields);
+  syncPortFields();
+}
+
+function applyBrokerForm(data) {
+  var app = data.AppData || data;
+  if (!app.BrokerListener) app.BrokerListener = {};
+  if (!app.BrokerSessionPolicy) app.BrokerSessionPolicy = {};
+  app.BrokerListener.PlainTcpEnabled =
+    document.getElementById("broker_plain_enabled").value === "true";
+  app.BrokerListener.PlainTcpPort =
+    Number(document.getElementById("broker_plain_port").value);
+  app.BrokerListener.TlsEnabled =
+    document.getElementById("broker_tls_enabled").value === "true";
+  app.BrokerListener.TlsPort =
+    Number(document.getElementById("broker_tls_port").value);
+  app.BrokerSessionPolicy.MaxKeepAliveSec =
+    Number(document.getElementById("broker_max_keepalive").value);
+  app.BrokerSessionPolicy.ConnectHandshakeTimeoutSec =
+    Number(document.getElementById("broker_connect_timeout").value);
+}
+
+async function loadBroker() {
+  try {
+    var r = await fetch(APPDATA_URL, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    appData = await r.json();
+    document.getElementById("appContent").innerHTML = renderBrokerUI(appData);
+    wireBrokerControls();
+    setStatus(APPDATA_URL, "nb-status-ok", "Loaded");
+  } catch (e) {
+    document.getElementById("appContent").textContent = "Failed to load.";
+    setStatus(APPDATA_URL, "nb-status-err", "Load failed");
+  }
+}
+
+async function saveBroker() {
+  if (!appData) return;
+  setStatus(APPDATA_URL, "nb-status-info", "Saving…");
+  try {
+    applyBrokerForm(appData);
+    var r = await fetch(APPDATA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(appData)
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    await loadBroker();
+    setStatus(APPDATA_URL, "nb-status-ok", "Saved");
+  } catch (e) {
+    setStatus(APPDATA_URL, "nb-status-err", "Save failed");
+  }
+}
+
+function renderInterfaceCard(name, iface) {
+  var ipv4 = iface.IPv4;
+  var mode = simplifiedIpv4Mode(ipv4.Mode.Value);
+  var prefix = "net_" + name + "_";
+  var html = [];
+  html.push("<div class='nb-network-if'>");
+  html.push("<h3>" + escText(name) + "</h3>");
+  html.push("<p class='nb-help' style='margin-bottom:12px;'>MAC " + escText(iface.MAC || "") + "</p>");
+  html.push("<h4>IPv4</h4>");
+  html.push("<div class='nb-form-row'><label for='" + escAttr(prefix + "mode") + "'>Address mode</label><div>");
+  html.push("<select id='" + escAttr(prefix + "mode") + "' data-if='" + escAttr(name) + "' class='net-mode-select'>");
+  ["DHCP", "Static", "Disabled"].forEach(function (opt) {
+    var sel = (opt === mode) ? " selected='selected'" : "";
+    html.push("<option" + sel + ">" + escText(opt) + "</option>");
+  });
+  html.push("</select></div></div>");
+  var staticHidden = (mode === "Static") ? "" : " hidden";
+  html.push("<div id='" + escAttr(prefix + "static") + "' class='net-static-fields'" + staticHidden + ">");
+  html.push(formRow("Static IP", prefix + "StaticAddr", ipv4.StaticAddr, false));
+  html.push(formRow("Subnet mask", prefix + "StaticMask", ipv4.StaticMask, false));
+  html.push(formRow("Gateway", prefix + "StaticGate", ipv4.StaticGate, false));
+  html.push(formRow("DNS 1", prefix + "StaticDNS1", ipv4.StaticDNS1, false));
+  html.push(formRow("DNS 2", prefix + "StaticDNS2", ipv4.StaticDNS2, false));
+  html.push("</div>");
+  var statusHidden = (mode === "Static") ? " hidden" : "";
+  html.push("<p id='" + escAttr(prefix + "status") + "' class='nb-help net-dhcp-status'" + statusHidden + ">");
+  html.push("Assigned: " + escText(ipv4.ActiveAddr || "none"));
+  if (ipv4.ActiveAddr && ipv4.ActiveAddr !== "0.0.0.0") {
+    html.push(" · mask " + escText(ipv4.ActiveMask));
+    html.push(" · gw " + escText(ipv4.ActiveGate));
+  }
+  html.push("</p>");
+  html.push("</div>");
+  return html.join("");
+}
+
+function toggleNetworkFields(prefix, mode) {
+  var staticBlock = document.getElementById(prefix + "static");
+  var statusBlock = document.getElementById(prefix + "status");
+  if (staticBlock) staticBlock.hidden = (mode !== "Static");
+  if (statusBlock) statusBlock.hidden = (mode === "Static");
+}
+
+function wireNetworkControls() {
+  document.querySelectorAll(".net-mode-select").forEach(function (sel) {
+    sel.addEventListener("change", function () {
+      toggleNetworkFields("net_" + sel.getAttribute("data-if") + "_", sel.value);
+    });
+    toggleNetworkFields("net_" + sel.getAttribute("data-if") + "_", sel.value);
+  });
+}
+
+function renderNetworkUI(data) {
+  var netIf = data.NetIf || data;
+  var cards = [];
+  Object.keys(netIf).forEach(function (key) {
+    if (isInterfaceBlock(netIf[key])) {
+      cards.push(renderInterfaceCard(key, netIf[key]));
+    }
+  });
+  if (cards.length === 0) {
+    return "<p>No network interfaces found.</p>";
+  }
+  return cards.join("");
+}
+
+function applyNetworkForm(data) {
+  var netIf = data.NetIf || data;
+  Object.keys(netIf).forEach(function (name) {
+    var iface = netIf[name];
+    if (!isInterfaceBlock(iface)) return;
+    var prefix = "net_" + name + "_";
+    var modeEl = document.getElementById(prefix + "mode");
+    if (!modeEl) return;
+    iface.IPv4.Mode.Value = ipv4ModeFromUi(modeEl.value);
+    iface.IPv4.StaticAddr = document.getElementById(prefix + "StaticAddr").value;
+    iface.IPv4.StaticMask = document.getElementById(prefix + "StaticMask").value;
+    iface.IPv4.StaticGate = document.getElementById(prefix + "StaticGate").value;
+    iface.IPv4.StaticDNS1 = document.getElementById(prefix + "StaticDNS1").value;
+    iface.IPv4.StaticDNS2 = document.getElementById(prefix + "StaticDNS2").value;
+  });
+}
+
+async function loadNetwork() {
+  try {
+    var r = await fetch(NETIF_URL, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    netIfData = await r.json();
+    document.getElementById("networkContent").innerHTML = renderNetworkUI(netIfData);
+    wireNetworkControls();
+    setStatus(NETIF_URL, "nb-status-ok", "Loaded");
+  } catch (e) {
+    document.getElementById("networkContent").textContent = "Failed to load.";
+    setStatus(NETIF_URL, "nb-status-err", "Load failed");
+  }
+}
+
+async function saveNetwork() {
+  if (!netIfData) return;
+  setStatus(NETIF_URL, "nb-status-info", "Saving…");
+  try {
+    applyNetworkForm(netIfData);
+    var r = await fetch(NETIF_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(netIfData)
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    await loadNetwork();
+    setStatus(NETIF_URL, "nb-status-ok", "Saved");
+  } catch (e) {
+    setStatus(NETIF_URL, "nb-status-err", "Save failed");
+  }
+}
+
+function setStatus(url, cls, text) {
+  var el = document.querySelector("[data-status='" + url + "']");
+  if (el) { el.className = "nb-status " + cls; el.textContent = text; }
+}
+
+function renderLimits(limits) {
+  var rows = [];
+  Object.keys(limits).sort().forEach(function (key) {
+    rows.push("<tr><td class='nb-part'>" + escText(key) + "</td><td class='nb-spec'>" +
+              escText(limits[key]) + "</td></tr>");
+  });
+  document.getElementById("limitsBody").innerHTML = rows.join("");
+}
+
+function listenerSummary(data) {
+  var parts = [];
+  if (data.plain_tcp_enabled) {
+    parts.push("TCP :" + data.plain_tcp_port + (data.listener_active ? " active" : " inactive"));
+  } else {
+    parts.push("TCP disabled");
+  }
+  if (data.tls_enabled) {
+    parts.push("TLS :" + data.tls_port + (data.tls_listener_active ? " active" : " inactive"));
+  } else {
+    parts.push("TLS disabled");
+  }
+  return parts.join(" · ");
+}
+
+async function refreshStatus() {
+  var pill = document.getElementById("statusPill");
+  var detail = document.getElementById("statusDetail");
+  try {
+    var r = await fetch("api/broker/status", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var data = await r.json();
+    var m = data.metrics || {};
+
+    document.getElementById("headerMeta").textContent =
+      data.platform + " · uptime " + data.uptime + "s";
+    document.getElementById("statClients").textContent =
+      m.clients_connected + " connected (peak " + m.clients_connected_peak + ")" +
+      (data.tls_clients_connected ? " · " + data.tls_clients_connected + " TLS" : "");
+    document.getElementById("statPublish").textContent =
+      m.publish_received + " / " + m.publish_sent;
+    document.getElementById("statListener").textContent = listenerSummary(data);
+
+    detail.textContent =
+      "accept " + m.connect_accept + " · reject " + m.connect_reject +
+      " · parser errors " + m.parser_errors +
+      " · slow consumer drops " + m.slow_consumer_disconnects;
+
+    if (data.limits) renderLimits(data.limits);
+
+    var anyActive = data.listener_active || data.tls_listener_active;
+    pill.className = "nb-status " + (anyActive ? "nb-status-ok" : "nb-status-warn");
+    pill.textContent = anyActive ? "Running" : "Listeners off";
+  } catch (e) {
+    pill.className = "nb-status nb-status-err";
+    pill.textContent = "Status unavailable";
+    detail.textContent = String(e);
+  }
+}
+
+function setSslStatus(elId, cls, text) {
+  var el = document.getElementById(elId);
+  if (el) { el.className = "nb-status " + cls; el.textContent = text; }
+}
+
+async function triggerReboot() {
+  await fetch("api/reboot", { method: "POST", headers: { "Content-Type": "application/json" }, body: "" });
+}
+
+async function loadSslStatus() {
+  try {
+    var r = await fetch("api/ssl.json", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    sslConfig = await r.json();
+    populateSslStatus(!sslStatusInitialized);
+    sslStatusInitialized = true;
+
+    var status = sslConfig.httpsService && sslConfig.httpsService.status;
+    if (status === "waiting_for_time" || status === "generating") {
+      if (!sslRefreshTimer) sslRefreshTimer = setInterval(loadSslStatus, 2000);
+    } else if (sslRefreshTimer) {
+      clearInterval(sslRefreshTimer);
+      sslRefreshTimer = null;
+    }
+  } catch (e) {
+    var banner = document.getElementById("https-service-status");
+    if (banner) banner.textContent = "Failed to load SSL status.";
+  }
+}
+
+function populateSslStatus(populateDropdowns) {
+  var status = (sslConfig.httpsService && sslConfig.httpsService.status) || "unknown";
+  var isUserCert = sslConfig.certificate && sslConfig.certificate.source === "user";
+  var certLabel = isUserCert ? "user-installed certificate" : "auto-generated certificate";
+  var banner = document.getElementById("https-service-status");
+  var banners = {
+    waiting_for_time: { cls: "nb-status-warn", text: "Waiting for valid time — HTTPS pending, " + certLabel },
+    generating:       { cls: "nb-status-info", text: "Generating " + certLabel + "..." },
+    failed:           { cls: "nb-status-err",  text: "Certificate generation failed — HTTPS unavailable" },
+    active:           { cls: "nb-status-ok",   text: "HTTPS active · " + certLabel + " (also used for MQTTS)" },
+    active_user_cert: { cls: "nb-status-ok",   text: "HTTPS active · " + certLabel + " (also used for MQTTS)" },
+    disabled:         { cls: "nb-status-warn", text: "HTTPS disabled · " + certLabel }
+  };
+  var b = banners[status] || { cls: "", text: "Status: " + status };
+  if (banner) {
+    banner.className = "nb-ssl-banner nb-status " + b.cls;
+    banner.textContent = b.text;
+  }
+
+  if (populateDropdowns) {
+    var httpsEl = document.getElementById("httpsEnabled");
+    var httpEl = document.getElementById("httpEnabled");
+    var authAllEl = document.getElementById("requireAuthForAll");
+    if (httpsEl && sslConfig.protocols) httpsEl.value = sslConfig.protocols.httpsEnabled ? "true" : "false";
+    if (httpEl && sslConfig.protocols) httpEl.value = sslConfig.protocols.httpEnabled ? "true" : "false";
+    if (authAllEl && sslConfig.protocols) {
+      authAllEl.value = sslConfig.protocols.requireAuthForAll ? "true" : "false";
+    }
+  }
+
+  var regen = document.getElementById("regenerate-section");
+  if (regen) regen.hidden = isUserCert;
+  var reset = document.getElementById("reset-section");
+  if (reset) reset.hidden = !isUserCert;
+}
+
+async function saveSslProtocols() {
+  setSslStatus("sslProtocolsStatus", "nb-status-info", "Saving…");
+  try {
+    var r = await fetch("api/ssl/protocols", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        httpsEnabled: document.getElementById("httpsEnabled").value === "true",
+        httpEnabled: document.getElementById("httpEnabled").value === "true",
+        requireAuthForAll: document.getElementById("requireAuthForAll").value === "true"
+      })
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    setSslStatus("sslProtocolsStatus", "nb-status-ok", "Saved (reboot required)");
+  } catch (e) {
+    setSslStatus("sslProtocolsStatus", "nb-status-err", "Save failed");
+  }
+}
+
+async function saveSecuritySettings() {
+  var newPassword = document.getElementById("newPassword").value;
+  var repeatPassword = document.getElementById("repeatPassword").value;
+
+  if (newPassword || repeatPassword) {
+    if (newPassword !== repeatPassword) {
+      setSslStatus("securityAuthStatus", "nb-status-err", "Passwords do not match");
+      return;
+    }
+  }
+
+  setSslStatus("securityAuthStatus", "nb-status-info", "Saving…");
+  try {
+    var proto = await fetch("api/ssl/protocols", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        httpsEnabled: document.getElementById("httpsEnabled").value === "true",
+        httpEnabled: document.getElementById("httpEnabled").value === "true",
+        requireAuthForAll: document.getElementById("requireAuthForAll").value === "true"
+      })
+    });
+    if (!proto.ok) throw new Error("HTTP " + proto.status);
+
+    if (newPassword || repeatPassword) {
+      var pwd = await fetch("api/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          oldPassword: document.getElementById("oldPassword").value,
+          newPassword: newPassword,
+          repeatPassword: repeatPassword
+        })
+      });
+      var pwdResult = await pwd.json();
+      if (!pwd.ok || !pwdResult.success) {
+        throw new Error(pwdResult.message || "Password update failed");
+      }
+      document.getElementById("oldPassword").value = "";
+      document.getElementById("newPassword").value = "";
+      document.getElementById("repeatPassword").value = "";
+    }
+
+    setSslStatus("securityAuthStatus", "nb-status-ok", "Saved");
+    await loadSslStatus();
+  } catch (e) {
+    setSslStatus("securityAuthStatus", "nb-status-err", String(e.message || e));
+  }
+}
+
+async function loadMqttAuth() {
+  try {
+    var r = await fetch("api/mqtt/users", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var data = await r.json();
+    document.getElementById("mqttAuthRequired").value = data.auth_required ? "true" : "false";
+    document.getElementById("mqttAllowAnon").value = data.allow_anonymous ? "true" : "false";
+    var rows = [];
+    (data.users || []).forEach(function (name) {
+      rows.push("<tr><td class='nb-part'>" + escText(name) +
+        "</td><td><button class='nb-btn nb-btn-outline mqtt-del-user' type='button' data-user='" +
+        escAttr(name) + "'>Delete</button></td></tr>");
+    });
+    if (rows.length === 0) {
+      rows.push("<tr><td colspan='2'>No users defined (" + (data.max_users || 16) + " max).</td></tr>");
+    }
+    document.getElementById("mqttUsersBody").innerHTML = rows.join("");
+    document.querySelectorAll(".mqtt-del-user").forEach(function (btn) {
+      btn.addEventListener("click", function () { deleteMqttUser(btn.getAttribute("data-user")); });
+    });
+  } catch (e) {
+    document.getElementById("mqttUsersBody").innerHTML = "<tr><td colspan='2'>Failed to load.</td></tr>";
+  }
+}
+
+async function postMqttUsers(payload) {
+  var r = await fetch("api/mqtt/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  var data = await r.json().catch(function () { return {}; });
+  if (!r.ok || !data.success) throw new Error(data.message || "Request failed");
+  return data;
+}
+
+async function saveMqttAuthSettings() {
+  setSslStatus("mqttAuthStatus", "nb-status-info", "Saving…");
+  try {
+    await postMqttUsers({
+      action: "settings",
+      authRequired: document.getElementById("mqttAuthRequired").value,
+      allowAnonymous: document.getElementById("mqttAllowAnon").value
+    });
+    setSslStatus("mqttAuthStatus", "nb-status-ok", "Saved — applies to new connections");
+    await loadMqttAuth();
+  } catch (e) {
+    setSslStatus("mqttAuthStatus", "nb-status-err", String(e.message || e));
+  }
+}
+
+async function addMqttUser() {
+  var user = document.getElementById("mqttNewUser").value.trim();
+  var pass = document.getElementById("mqttNewPass").value;
+  if (!user || !pass) {
+    setSslStatus("mqttUserStatus", "nb-status-err", "Username and password required");
+    return;
+  }
+  setSslStatus("mqttUserStatus", "nb-status-info", "Saving…");
+  try {
+    await postMqttUsers({ action: "add", username: user, password: pass });
+    document.getElementById("mqttNewUser").value = "";
+    document.getElementById("mqttNewPass").value = "";
+    setSslStatus("mqttUserStatus", "nb-status-ok", "User saved");
+    await loadMqttAuth();
+  } catch (e) {
+    setSslStatus("mqttUserStatus", "nb-status-err", String(e.message || e));
+  }
+}
+
+async function deleteMqttUser(user) {
+  if (!confirm("Delete MQTT user '" + user + "'?")) return;
+  try {
+    await postMqttUsers({ action: "delete", username: user });
+    setSslStatus("mqttUserStatus", "nb-status-ok", "User deleted");
+    await loadMqttAuth();
+  } catch (e) {
+    setSslStatus("mqttUserStatus", "nb-status-err", String(e.message || e));
+  }
+}
+
+async function regenerateCert() {
+  if (!confirm("Regenerate the self-signed certificate?\n\nThe device will reboot to apply the new certificate.")) return;
+  setSslStatus("sslCertStatus", "nb-status-info", "Working…");
+  try {
+    var r = await fetch("api/ssl/regenerate", { method: "POST", headers: { "Content-Type": "application/json" }, body: "" });
+    var data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.message || "Failed");
+    setSslStatus("sslCertStatus", "nb-status-ok", "Rebooting…");
+    await triggerReboot();
+  } catch (e) {
+    setSslStatus("sslCertStatus", "nb-status-err", "Regenerate failed");
+  }
+}
+
+async function resetCert() {
+  if (!confirm("Reset to auto-generated certificate?\n\nThis removes the user-installed certificate. The device will reboot.")) return;
+  setSslStatus("sslCertStatus", "nb-status-info", "Working…");
+  try {
+    var r = await fetch("api/ssl/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: "" });
+    var data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.message || "Failed");
+    setSslStatus("sslCertStatus", "nb-status-ok", "Rebooting…");
+    await triggerReboot();
+  } catch (e) {
+    setSslStatus("sslCertStatus", "nb-status-err", "Reset failed");
+  }
+}
+
+async function installCert() {
+  var certFile = document.getElementById("certFile").files[0];
+  var keyFile = document.getElementById("keyFile").files[0];
+  if (!certFile || !keyFile) {
+    setSslStatus("sslCertStatus", "nb-status-err", "Select certificate and key files");
+    return;
+  }
+
+  setSslStatus("sslCertStatus", "nb-status-info", "Uploading…");
+  var formData = new FormData();
+  formData.append("certificateFile", certFile);
+  formData.append("keyFile", keyFile);
+
+  try {
+    var response = await fetch("httpsform", { method: "POST", body: formData });
+    if (response.url.indexOf("ssl_status") >= 0) {
+      await saveSslProtocols();
+      setSslStatus("sslCertStatus", "nb-status-ok", "Installed — rebooting…");
+      await triggerReboot();
+    } else {
+      setSslStatus("sslCertStatus", "nb-status-err", "Upload failed — cert/key must match");
+      await loadSslStatus();
+    }
+  } catch (e) {
+    setSslStatus("sslCertStatus", "nb-status-err", "Upload failed");
+  }
+}
+
+document.getElementById("brokerSaveBtn").addEventListener("click", saveBroker);
+document.getElementById("networkSaveBtn").addEventListener("click", saveNetwork);
+document.getElementById("securitySaveBtn").addEventListener("click", saveSecuritySettings);
+document.getElementById("sslProtocolsSaveBtn").addEventListener("click", saveSslProtocols);
+document.getElementById("regenerateCertBtn").addEventListener("click", regenerateCert);
+document.getElementById("resetCertBtn").addEventListener("click", resetCert);
+document.getElementById("installCertBtn").addEventListener("click", installCert);
+document.getElementById("mqttAuthSettingsBtn").addEventListener("click", saveMqttAuthSettings);
+document.getElementById("mqttAddUserBtn").addEventListener("click", addMqttUser);
+
+initTabs();
+loadBroker();
+loadNetwork();
+loadSslStatus();
+loadMqttAuth();
+refreshStatus();
+statusTimer = setInterval(refreshStatus, 2000);
+</script>
+
+</body>
+</html>
