@@ -27,6 +27,8 @@
 
 #include "ssl_service.h"
 
+#include "acme_config.hpp"
+#include "acme_service.h"
 #include "nvsettings.h"
 #include "ssluser.h"
 #include "webui_config.h"
@@ -47,7 +49,17 @@ static const time_t kMinValidUnixTime = 1767225600UL;  // 2026-01-01 — cert va
 
 volatile HttpsServiceStatus gHttpsStatus = HTTPS_STATUS_DISABLED;
 
-// Tries user-installed cert first, then HAL auto-generated. Updates gHttpsStatus.
+static bool load_hal_certificate(HttpsServiceStatus activeStatus)
+{
+    if (!HalDeviceCertValid()) {
+        return false;
+    }
+    SSL_ServerReadyCert(HalGetDeviceCert(), HalGetDeviceKey(), HalGetDeviceFormat());
+    gHttpsStatus = activeStatus;
+    return true;
+}
+
+// Tries user-installed cert first, then ACME, then HAL auto-generated. Updates gHttpsStatus.
 static bool load_ssl_certificate()
 {
     if (NV_Settings.sslCertSource == SSL_CERT_SOURCE_USER_INSTALLED) {
@@ -63,9 +75,19 @@ static bool load_ssl_certificate()
         return false;
     }
 
-    if (HalDeviceCertValid()) {
-        SSL_ServerReadyCert(HalGetDeviceCert(), HalGetDeviceKey(), HalGetDeviceFormat());
-        gHttpsStatus = HTTPS_STATUS_ACTIVE;
+    if (NV_Settings.sslCertSource == SSL_CERT_SOURCE_ACME) {
+        if (AcmeServiceCertReady()) {
+            SSL_ServerReadyCert(HalGetDeviceCert(), HalGetDeviceKey(), HalGetDeviceFormat());
+            gHttpsStatus = HTTPS_STATUS_ACME_ACTIVE;
+            iprintf("[SSL] Using Let's Encrypt (ACME) certificate\r\n");
+            return true;
+        }
+        gHttpsStatus = HTTPS_STATUS_ACME_PENDING;
+        iprintf("[SSL] ACME enrollment pending (state: %s)\r\n", AcmeServiceGetStateString());
+        return false;
+    }
+
+    if (load_hal_certificate(HTTPS_STATUS_ACTIVE)) {
         iprintf("[SSL] Using auto-generated HAL certificate\r\n");
         return true;
     }
@@ -78,6 +100,8 @@ static bool load_ssl_certificate()
 // HTTPS is enabled, serves HTTP only and leaves gHttpsStatus as waiting/failed.
 static void start_web_server(bool ssl_cert_ready)
 {
+    const bool acme_pending = (NV_Settings.sslCertSource == SSL_CERT_SOURCE_ACME && !ssl_cert_ready);
+
     if (ssl_cert_ready) {
         if (gWebUIConfig.m_httpsEnabled && gWebUIConfig.m_httpEnabled) {
             StartHttps(443, 80);
@@ -96,6 +120,13 @@ static void start_web_server(bool ssl_cert_ready)
         return;
     }
 
+    if (acme_pending) {
+        StartHttp(80);
+        gHttpsStatus = HTTPS_STATUS_ACME_PENDING;
+        iprintf("[SSL] Web server: HTTP 80 (ACME enrollment in progress)\r\n");
+        return;
+    }
+
     StartHttp(80);
     if (gWebUIConfig.m_httpsEnabled) {
         gHttpsStatus = HTTPS_STATUS_WAITING_FOR_TIME;
@@ -108,22 +139,48 @@ static void start_web_server(bool ssl_cert_ready)
 
 bool SslCertReady()
 {
-    return gHttpsStatus == HTTPS_STATUS_ACTIVE || gHttpsStatus == HTTPS_STATUS_USER_CERT;
+    return gHttpsStatus == HTTPS_STATUS_ACTIVE || gHttpsStatus == HTTPS_STATUS_USER_CERT ||
+           gHttpsStatus == HTTPS_STATUS_ACME_ACTIVE;
 }
 
 bool SslServiceInit()
 {
     CheckNVSettings();
+    AcmeConfigSanitizeOnBoot();
     SslInit();
+    AcmeServiceInit();
 
     const bool ssl_cert_ready = load_ssl_certificate();
     start_web_server(ssl_cert_ready);
     return ssl_cert_ready;
 }
 
+void SslServiceOnAcmeCertReady()
+{
+    if (!AcmeServiceCertReady()) {
+        return;
+    }
+
+    SSL_ServerReadyCert(HalGetDeviceCert(), HalGetDeviceKey(), HalGetDeviceFormat());
+    gHttpsStatus = HTTPS_STATUS_ACME_ACTIVE;
+    iprintf("[SSL] Let's Encrypt certificate ready; starting HTTPS\r\n");
+
+    if (gWebUIConfig.m_httpsEnabled) {
+        if (gWebUIConfig.m_httpEnabled) {
+            StartHttps(443, 80);
+        } else {
+            StartHttps(443, 0);
+        }
+    }
+}
+
 void SslCertWaitTask(void *pd)
 {
     (void)pd;
+
+    if (NV_Settings.sslCertSource == SSL_CERT_SOURCE_ACME) {
+        return;
+    }
 
     if (HalDeviceCertValid() || gSslCertLoaded ||
         NV_Settings.sslCertSource == SSL_CERT_SOURCE_USER_INSTALLED) {

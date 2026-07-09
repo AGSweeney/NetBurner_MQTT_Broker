@@ -27,6 +27,8 @@
 // protocol toggles, and deferred device reboot after cert changes.
 
 #include "ssl_config.h"
+#include "acme_config.hpp"
+#include "acme_service.h"
 #include "nvsettings.h"
 #include "ssluser.h"
 #include "webui_config.h"
@@ -43,6 +45,7 @@
 #include <init.h>
 #include <iointernal.h>
 #include <nbrtos.h>
+#include <string.h>
 
 static int sCertificateFileStatus = SSL_STATUS_VALID;
 static int sKeyFileStatus = SSL_STATUS_VALID;
@@ -130,9 +133,11 @@ int HttpsPost(int sock, PostEvents event, const char *pName, const char *pValue)
 
     if (event == eVariable) {
         if (strcmp(pName, "ResetToDefaults") == 0) {
+            AcmeConfigDisable();
             SslUserSetDefault();
             gSslCertLoaded = false;
             HalEraseDeviceCertAndKey();
+            AcmeServiceRestart();
             iprintf("[SSL] Reset to auto-generated certificate (reboot required)\r\n");
         }
     } else if (event == eFile) {
@@ -190,6 +195,7 @@ int HttpsPost(int sock, PostEvents event, const char *pName, const char *pValue)
                     NV_Settings.sslKeyLength = (uint32_t)keyFileSize;
                     NV_Settings.sslCertSource = SSL_CERT_SOURCE_USER_INSTALLED;
                     gSslCertLoaded = true;
+                    AcmeConfigDisable();
 
                     SSL_ServerReadyCert((const unsigned char *)GetCertificatePEM(),
                                         (const unsigned char *)GetPrivateKeyPEM());
@@ -237,9 +243,43 @@ static const char *GetHttpsStatusString(HttpsServiceStatus status)
             return "active";
         case HTTPS_STATUS_USER_CERT:
             return "active_user_cert";
+        case HTTPS_STATUS_ACME_PENDING:
+            return "acme_pending";
+        case HTTPS_STATUS_ACME_ACTIVE:
+            return "acme_active";
+        case HTTPS_STATUS_ACME_FAILED:
+            return "acme_failed";
         default:
             return "unknown";
     }
+}
+
+static const char *GetCertSourceString()
+{
+    if (NV_Settings.sslCertSource == SSL_CERT_SOURCE_USER_INSTALLED) {
+        return "user";
+    }
+    if (NV_Settings.sslCertSource == SSL_CERT_SOURCE_ACME) {
+        return "acme";
+    }
+    return "default";
+}
+
+static void JsonWriteEscapedString(int sock, const char *value)
+{
+    if (value == nullptr) {
+        fdprintf(sock, "\"\"");
+        return;
+    }
+    writestring(sock, "\"");
+    for (const char *p = value; *p != '\0'; ++p) {
+        if (*p == '\\' || *p == '\"') {
+            writestring(sock, "\\");
+        }
+        char ch[2] = {*p, '\0'};
+        writestring(sock, ch);
+    }
+    writestring(sock, "\"");
 }
 
 // GET api/ssl.json — certificate source, HTTPS service state, and last upload errors.
@@ -253,8 +293,7 @@ int ApiSslGetHandler(int sock, HTTP_Request &req)
 
     fdprintf(sock, "{\r\n");
     fdprintf(sock, "  \"certificate\": {\r\n");
-    fdprintf(sock, "    \"source\": \"%s\",\r\n",
-             (NV_Settings.sslCertSource == SSL_CERT_SOURCE_USER_INSTALLED) ? "user" : "default");
+    fdprintf(sock, "    \"source\": \"%s\",\r\n", GetCertSourceString());
     fdprintf(sock, "    \"length\": %lu,\r\n", (unsigned long)NV_Settings.sslCertLength);
     fdprintf(sock, "    \"installed\": %s\r\n",
              (NV_Settings.sslCertSource == SSL_CERT_SOURCE_USER_INSTALLED) ? "true" : "false");
@@ -276,6 +315,23 @@ int ApiSslGetHandler(int sock, HTTP_Request &req)
     fdprintf(sock, "  \"lastError\": {\r\n");
     fdprintf(sock, "    \"certificate\": %d,\r\n", sCertificateFileStatus);
     fdprintf(sock, "    \"key\": %d\r\n", sKeyFileStatus);
+    fdprintf(sock, "  },\r\n");
+    fdprintf(sock, "  \"acme\": {\r\n");
+    fdprintf(sock, "    \"supported\": %s,\r\n", AcmePlatformSupported() ? "true" : "false");
+    if (AcmePlatformSupported()) {
+        fdprintf(sock, "    \"enabled\": %s,\r\n", gAcmeConfig.m_enabled ? "true" : "false");
+        fdprintf(sock, "    \"commonName\": ");
+        JsonWriteEscapedString(sock, gAcmeConfig.m_commonName.c_str());
+        fdprintf(sock, ",\r\n    \"altNames\": ");
+        JsonWriteEscapedString(sock, gAcmeConfig.m_altNames.c_str());
+        fdprintf(sock, ",\r\n    \"email\": ");
+        JsonWriteEscapedString(sock, gAcmeConfig.m_email.c_str());
+        fdprintf(sock, ",\r\n    \"useStaging\": %s,\r\n",
+                 gAcmeConfig.m_useStaging ? "true" : "false");
+        fdprintf(sock, "    \"state\": ");
+        JsonWriteEscapedString(sock, AcmeServiceGetStateString());
+        fdprintf(sock, "\r\n");
+    }
     fdprintf(sock, "  }\r\n");
     fdprintf(sock, "}\r\n");
 
@@ -290,6 +346,8 @@ int ApiSslResetHandler(int sock, HTTP_Request &req)
     SslUserSetDefault();
     gSslCertLoaded = false;
     HalEraseDeviceCertAndKey();
+    AcmeConfigDisable();
+    AcmeServiceRestart();
 
     writestring(sock, "HTTP/1.0 200 OK\r\n");
     writestring(sock, "Content-Type: application/json\r\n");
@@ -310,6 +368,15 @@ int ApiSslRegenerateHandler(int sock, HTTP_Request &req)
         writestring(sock, "\r\n");
         fdprintf(sock,
                  "{\"success\": false, \"message\": \"Cannot regenerate user-installed certificate. Use reset first.\"}\r\n");
+        return 1;
+    }
+
+    if (NV_Settings.sslCertSource == SSL_CERT_SOURCE_ACME) {
+        writestring(sock, "HTTP/1.0 400 Bad Request\r\n");
+        writestring(sock, "Content-Type: application/json\r\n");
+        writestring(sock, "\r\n");
+        fdprintf(sock,
+                 "{\"success\": false, \"message\": \"Cannot regenerate while Let's Encrypt is enabled. Change certificate source first.\"}\r\n");
         return 1;
     }
 
@@ -360,6 +427,185 @@ int ApiSslProtocolsHandler(int sock, HTTP_Request &req)
     return 1;
 }
 
+static bool json_body_has_true(const char *body, const char *key)
+{
+    char pattern1[64];
+    char pattern2[64];
+    snprintf(pattern1, sizeof(pattern1), "\"%s\":true", key);
+    snprintf(pattern2, sizeof(pattern2), "\"%s\": true", key);
+    return (strstr(body, pattern1) != nullptr || strstr(body, pattern2) != nullptr);
+}
+
+static bool json_extract_string(const char *body, const char *key, char *out, size_t outSize)
+{
+    if (outSize == 0) {
+        return false;
+    }
+    out[0] = '\0';
+
+    char searchKey[64];
+    snprintf(searchKey, sizeof(searchKey), "\"%s\"", key);
+    const char *pos = strstr(body, searchKey);
+    if (pos == nullptr) {
+        return false;
+    }
+    pos = strchr(pos, ':');
+    if (pos == nullptr) {
+        return false;
+    }
+    pos = strchr(pos, '\"');
+    if (pos == nullptr) {
+        return false;
+    }
+    ++pos;
+    const char *end = strchr(pos, '\"');
+    if (end == nullptr) {
+        return false;
+    }
+    const size_t len = static_cast<size_t>(end - pos);
+    if (len >= outSize) {
+        return false;
+    }
+    memcpy(out, pos, len);
+    out[len] = '\0';
+    return true;
+}
+
+static int read_post_body(HTTP_Request &req, int sock, char *body, size_t bodySize)
+{
+    if (bodySize == 0) {
+        return 0;
+    }
+    body[0] = '\0';
+    if (bodySize <= 1 || (int)req.content_length <= 0 ||
+        req.content_length >= (uint32_t)bodySize) {
+        return 0;
+    }
+    int nleft = req.content_length;
+    int offset = 0;
+    while (nleft > 0) {
+        const int rv = read(sock, body + offset, nleft);
+        if (rv <= 0) {
+            break;
+        }
+        offset += rv;
+        nleft -= rv;
+    }
+    body[offset] = '\0';
+    return offset;
+}
+
+// POST api/ssl/acme — save Let's Encrypt settings (SOMRT1061 only; reboot required).
+int ApiSslAcmeHandler(int sock, HTTP_Request &req)
+{
+    char body[512] = {};
+    read_post_body(req, sock, body, sizeof(body));
+
+    if (!AcmePlatformSupported()) {
+        writestring(sock, "HTTP/1.0 400 Bad Request\r\n");
+        writestring(sock, "Content-Type: application/json\r\n");
+        writestring(sock, "\r\n");
+        fdprintf(sock,
+                 "{\"success\": false, \"message\": \"Let's Encrypt is supported on SOMRT1061 only.\"}\r\n");
+        return 1;
+    }
+
+    char source[16] = {};
+    json_extract_string(body, "certSource", source, sizeof(source));
+    const bool enableAcme = (strcmp(source, "acme") == 0);
+
+    char commonName[128] = {};
+    char altNames[256] = {};
+    char email[128] = {};
+    json_extract_string(body, "commonName", commonName, sizeof(commonName));
+    json_extract_string(body, "altNames", altNames, sizeof(altNames));
+    json_extract_string(body, "email", email, sizeof(email));
+    const bool useStaging = json_body_has_true(body, "useStaging");
+
+    if (enableAcme) {
+        if (commonName[0] == '\0') {
+            writestring(sock, "HTTP/1.0 400 Bad Request\r\n");
+            writestring(sock, "Content-Type: application/json\r\n");
+            writestring(sock, "\r\n");
+            fdprintf(sock,
+                     "{\"success\": false, \"message\": \"Common name is required for Let's Encrypt.\"}\r\n");
+            return 1;
+        }
+        if (!gWebUIConfig.m_httpEnabled) {
+            writestring(sock, "HTTP/1.0 400 Bad Request\r\n");
+            writestring(sock, "Content-Type: application/json\r\n");
+            writestring(sock, "\r\n");
+            fdprintf(sock,
+                     "{\"success\": false, \"message\": \"HTTP (port 80) must be enabled for ACME HTTP-01 validation.\"}\r\n");
+            return 1;
+        }
+    }
+
+    gAcmeConfig.m_enabled = enableAcme;
+    gAcmeConfig.m_commonName = commonName;
+    gAcmeConfig.m_altNames = (altNames[0] != '\0') ? altNames : commonName;
+    gAcmeConfig.m_email = email;
+    gAcmeConfig.m_useStaging = useStaging;
+    SaveConfigToStorage();
+
+    if (enableAcme) {
+        SslUserSetDefault();
+        gSslCertLoaded = false;
+        HalEraseDeviceCertAndKey();
+        NV_Settings.sslCertSource = SSL_CERT_SOURCE_ACME;
+        SaveNVSettings();
+    } else {
+        AcmeConfigDisable();
+        AcmeServiceRestart();
+        NV_Settings.sslCertSource = SSL_CERT_SOURCE_LIBRARY_DEFAULT;
+        SaveNVSettings();
+        HalEraseDeviceCertAndKey();
+    }
+
+    writestring(sock, "HTTP/1.0 200 OK\r\n");
+    writestring(sock, "Content-Type: application/json\r\n");
+    writestring(sock, "\r\n");
+    fdprintf(sock,
+             "{\"success\": true, \"message\": \"ACME settings saved. Reboot required.\"}\r\n");
+    schedule_reboot();
+    return 1;
+}
+
+// POST api/ssl/acme/retry — restart ACME enrollment (SOMRT1061 only; reboot required).
+int ApiSslAcmeRetryHandler(int sock, HTTP_Request &req)
+{
+    (void)req;
+
+    if (!AcmePlatformSupported()) {
+        writestring(sock, "HTTP/1.0 400 Bad Request\r\n");
+        writestring(sock, "Content-Type: application/json\r\n");
+        writestring(sock, "\r\n");
+        fdprintf(sock,
+                 "{\"success\": false, \"message\": \"Let's Encrypt is supported on SOMRT1061 only.\"}\r\n");
+        return 1;
+    }
+
+    if (NV_Settings.sslCertSource != SSL_CERT_SOURCE_ACME) {
+        writestring(sock, "HTTP/1.0 400 Bad Request\r\n");
+        writestring(sock, "Content-Type: application/json\r\n");
+        writestring(sock, "\r\n");
+        fdprintf(sock,
+                 "{\"success\": false, \"message\": \"Certificate source is not Let's Encrypt.\"}\r\n");
+        return 1;
+    }
+
+    HalEraseDeviceCertAndKey();
+    AcmeServiceRestart();
+
+    writestring(sock, "HTTP/1.0 200 OK\r\n");
+    writestring(sock, "Content-Type: application/json\r\n");
+    writestring(sock, "\r\n");
+    fdprintf(sock,
+             "{\"success\": true, \"message\": \"ACME enrollment restarted. Reboot required.\"}\r\n");
+    schedule_reboot();
+    return 1;
+}
+
 // POST api/reboot — schedule deferred reboot (used after cert or config changes).
 int ApiRebootHandler(int sock, HTTP_Request &req)
 {
@@ -386,4 +632,6 @@ CallBackFunctionPageHandler gApiSslGet("api/ssl.json", ApiSslGetHandler, tGet, 5
 CallBackFunctionPageHandler gApiSslReset("api/ssl/reset", ApiSslResetHandler, tPost, 99);
 CallBackFunctionPageHandler gApiSslRegenerate("api/ssl/regenerate", ApiSslRegenerateHandler, tPost, 99);
 CallBackFunctionPageHandler gApiSslProtocols("api/ssl/protocols", ApiSslProtocolsHandler, tPost, 99);
+CallBackFunctionPageHandler gApiSslAcme("api/ssl/acme", ApiSslAcmeHandler, tPost, 99);
+CallBackFunctionPageHandler gApiSslAcmeRetry("api/ssl/acme/retry", ApiSslAcmeRetryHandler, tPost, 99);
 CallBackFunctionPageHandler gApiReboot("api/reboot", ApiRebootHandler, tPost, 99);

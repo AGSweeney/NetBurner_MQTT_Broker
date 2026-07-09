@@ -66,7 +66,7 @@ void ReadyCertAndKeys()
     bool keyOK = false;
 
     do {
-        if (NV_Settings.sslCertSource == SSL_CERT_SOURCE_LIBRARY_DEFAULT) {
+        if (NV_Settings.sslCertSource != SSL_CERT_SOURCE_USER_INSTALLED) {
             break;
         }
         if (NV_Settings.sslCertLength == 0 || NV_Settings.sslKeyLength == 0) {
@@ -164,7 +164,7 @@ void SslUserRetrieveCertificateNKey()
 {
     bool resetToDefault = false;
 
-    while (NV_Settings.sslCertSource != SSL_CERT_SOURCE_LIBRARY_DEFAULT) {
+    while (NV_Settings.sslCertSource == SSL_CERT_SOURCE_USER_INSTALLED) {
         if (NV_Settings.sslKeyLength <= 0) {
             resetToDefault = true;
             break;

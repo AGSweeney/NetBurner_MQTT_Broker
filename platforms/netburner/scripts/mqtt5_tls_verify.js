@@ -6,6 +6,7 @@
 const mqtt = require('mqtt');
 
 const HOST = process.argv[2] || '172.16.82.8';
+const VERIFY_CA = process.argv.includes('--verify-ca');
 const TLS_PORT = 8883;
 const results = [];
 const fail = (n, m) => results.push(`FAIL ${n}: ${m}`);
@@ -25,7 +26,8 @@ function tlsConnect(id, timeoutMs = 45000) {
             clientId: id,
             clean: true,
             connectTimeout: timeoutMs,
-            rejectUnauthorized: false,
+            rejectUnauthorized: VERIFY_CA,
+            servername: VERIFY_CA ? HOST : undefined,
             reconnectPeriod: 0,
         });
         let settled = false;

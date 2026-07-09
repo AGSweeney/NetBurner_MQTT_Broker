@@ -10,6 +10,7 @@ An embedded **MQTT 5.0 broker** for [NetBurner](https://www.netburner.com) modul
 - **Web admin UI** — Dashboard, broker settings, security (MQTT users), and network configuration at `http://<device-ip>/`
 - **Client authentication** — Optional username/password with salted SHA-256 credentials stored on EFFS flash (up to 16 users)
 - **Platform-tuned limits** — Compile-time capacity profiles sized per NetBurner target (clients, payload pool, retained store, TLS slots)
+- **Let's Encrypt (ACME)** — Optional publicly trusted TLS on **SOMRT1061** via the Security admin UI (NNDK 3.5+)
 
 ## Architecture
 
@@ -39,9 +40,9 @@ On NetBurner, `BrokerServerTask` drives the broker from one RTOS task using `sel
 | Platform | Development kit | Limits profile | Notes |
 |----------|-----------------|----------------|-------|
 | **NANO54415** | [NANO54415 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/nano54415-development-kit/) | `broker_limits_nano54415.hpp` | Default makefile target; primary reference hardware |
-| **SOMRT1061** | [SOMRT1061 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/arm-embedded-iot-development-kit-somrt1061/) | `broker_limits_somrt1061.hpp` | **Recommended** for new designs; dual Ethernet, validated on hardware |
+| **SOMRT1061** | [SOMRT1061 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/arm-embedded-iot-development-kit-somrt1061/) | `broker_limits_somrt1061.hpp` | **Recommended**; dual Ethernet; **Let's Encrypt / ACME supported** |
 | **MODM7AE70** | [MODM7AE70 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/modm7ae70-development-kit/) | `broker_limits_modm7ae70.hpp` | Tighter RAM budget (fewer clients, smaller payload pool) |
-| **MODRT1171** | [MODRT1171 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/i-mx-rt1171-embedded-iot-development-kit-modrt1171/) | `broker_limits_somrt1061.hpp` | **Recommended** for new designs; newest i.MX RT platform |
+| **MODRT1171** | [MODRT1171 Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/i-mx-rt1171-embedded-iot-development-kit-modrt1171/) | `broker_limits_somrt1061.hpp` | **Recommended**; newest i.MX RT platform; self-signed and user PEM only (no ACME in v1) |
 | **MOD5441X** | [MOD54415 LC Development Kit](https://www.netburner.com/products/development-kit/som-dev-kits/mod54415-lc-development-kit/) | `broker_limits_nano54415.hpp` | ColdFire platform; legacy deployments |
 
 Host unit tests use `MQTT_BROKER_HOST_LE` with limits aligned to NANO54415.
@@ -83,7 +84,7 @@ From the NetBurner application directory:
 cd platforms/netburner/nb-mqtt-broker
 make clean
 make                    # default PLATFORM=NANO54415
-make PLATFORM=SOMRT1061 # recommended
+make PLATFORM=SOMRT1061 # recommended; required for Let's Encrypt (ACME)
 make PLATFORM=MODRT1171 # recommended (newest RT platform)
 make PLATFORM=MODM7AE70
 make PLATFORM=MOD5441X
@@ -204,9 +205,64 @@ When authentication is enabled, credentials are managed from the **Security** ta
 
 The broker invokes a platform-supplied auth handler at CONNECT time; failed verification returns CONNACK reason `BadUserNameOrPassword` or `NotAuthorized`.
 
+## TLS certificate sources
+
+The same server certificate secures HTTPS (port 443) and MQTTS when enabled.
+
+| Source | Platforms | Use case |
+|--------|-----------|----------|
+| Auto-generated (self-signed) | All | LAN / lab; no public DNS |
+| User PEM upload | All | Corporate CA or manually provisioned cert |
+| **Let's Encrypt (ACME)** | **SOMRT1061 only** | Internet-facing broker with public DNS |
+
+## Let's Encrypt setup (SOMRT1061)
+
+Automatic TLS certificate enrollment uses the NetBurner NNDK ACME servlet ([NetBurner ACME tutorial](https://www.netburner.com/learn/new-feature-easy-ssl-certificates-with-acme-and-lets-encrypt/)).
+
+### Requirements
+
+- NNDK **3.5+** with ACME servlet support
+- Build with `make PLATFORM=SOMRT1061` (ACME is linked only on this platform)
+- Valid **NTP** time (configured automatically at boot)
+- A **public DNS name** pointing at the device
+- Port **80** reachable from the Internet (HTTP-01 challenge)
+- Port **443** for HTTPS and MQTTS after enrollment
+
+### Enable from the admin UI
+
+1. Open **Security** → **Certificates**
+2. Set **Certificate source** to **Let's Encrypt (ACME)**
+3. Enter **Common name**, **Alt names** (comma-separated SANs), and **Contact email**
+4. Optionally enable **Staging** for Let's Encrypt staging CA (testing, higher rate limits)
+5. Click **Apply Certificate Source** or **Save Let's Encrypt Settings** — the device reboots
+
+### Provisioning flow
+
+NTP sync → ACME HTTP-01 enrollment (port 80 must stay up) → HTTPS and MQTTS become active with a browser-trusted certificate. Poll enrollment status on the Security tab or via `GET /api/ssl.json` (`acme.state`, `httpsService.status`).
+
+### REST API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/ssl.json` | GET | Includes `acme.supported`, `acme.enabled`, `acme.state`, and certificate source |
+| `/api/ssl/acme` | POST | Save ACME settings and switch certificate source (reboot) |
+| `/api/ssl/acme/retry` | POST | Restart ACME enrollment (reboot) |
+
+On non-SOMRT1061 builds, `acme.supported` is `false` and ACME endpoints return HTTP 400.
+
+### MQTTS with Let's Encrypt
+
+MQTTS uses the same certificate as HTTPS. Clients can use standard CA trust stores (no `rejectUnauthorized: false`) when enrolled with the production Let's Encrypt CA:
+
+```bash
+node platforms/netburner/scripts/mqtt5_tls_verify.js broker.example.com --verify-ca
+```
+
 ## TLS / MQTTS
 
-MQTTS reuses the device HTTPS certificate managed by the NetBurner SSL service (user-installed, HAL auto-generated, or self-signed after NTP sync). Enable the TLS listener in broker settings once `SslCertReady()` is true. TLS client capacity is limited (`MaxTlsClients = 2` on reference platforms) due to handshake RAM cost on embedded targets.
+MQTTS reuses the device HTTPS certificate managed by the NetBurner SSL service. Certificate sources include user-installed PEM, HAL auto-generated, self-signed (after NTP sync), and **Let's Encrypt on SOMRT1061** — see [TLS certificate sources](#tls-certificate-sources) and [Let's Encrypt setup (SOMRT1061)](#lets-encrypt-setup-somrt1061).
+
+Enable the TLS listener in broker settings once `SslCertReady()` is true. TLS client capacity is limited (`MaxTlsClients = 2` on reference platforms) due to handshake RAM cost on embedded targets.
 
 ## Disclaimer
 

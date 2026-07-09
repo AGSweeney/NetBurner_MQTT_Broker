@@ -4,6 +4,7 @@
 // NetBurner application entry point. Brings up network, SSL, the admin web
 // server, and the MQTT broker task. Runs indefinitely after startup.
 
+#include "acme_service.h"
 #include "broker_server.hpp"
 #include "ssl_service.h"
 
@@ -38,9 +39,13 @@ void UserMain(void *pd)
     iprintf("Application: %s\r\nNNDK Revision: %s\r\n", AppName, GetReleaseTag());
     iprintf("Admin UI: http://<device-ip>/ (HTTPS when certificate is ready)\r\n");
 
-    // Auto-generated cert may still be pending; background task waits for NTP then activates TLS.
+    // Deferred TLS: ACME enrollment on SOMRT1061, or self-signed after NTP on other paths.
     if (!ssl_cert_ready) {
-        OSSimpleTaskCreatewName(SslCertWaitTask, OSGetNextPrio(OSNextPrio::Below), "SslCertWait");
+        if (AcmeServiceIsEnabled()) {
+            OSSimpleTaskCreatewName(AcmeMonitorTask, OSGetNextPrio(OSNextPrio::Below), "AcmeMonitor");
+        } else {
+            OSSimpleTaskCreatewName(SslCertWaitTask, OSGetNextPrio(OSNextPrio::Below), "SslCertWait");
+        }
     }
 
     BrokerServerInit();

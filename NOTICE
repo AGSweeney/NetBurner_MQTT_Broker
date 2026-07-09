@@ -21,6 +21,8 @@ Includes, among other material:
   - platforms/netburner/nb-mqtt-broker/src/broker_*.hpp
   - platforms/netburner/nb-mqtt-broker/src/mqtt_auth_store.*
   - platforms/netburner/nb-mqtt-broker/src/main.cpp
+  - platforms/netburner/nb-mqtt-broker/src/acme_config.cpp
+  - platforms/netburner/nb-mqtt-broker/src/acme_config.hpp
   - platforms/netburner/nb-mqtt-broker/html/   Admin UI pages and styles
   - platforms/netburner/scripts/             Device test and bench scripts
   - README.md and project build metadata adapted for this application
@@ -78,6 +80,13 @@ MQTT-broker-specific changes were made in this repository.
   platforms/netburner/nb-mqtt-broker/src/webui_config.cpp
   platforms/netburner/nb-mqtt-broker/src/webui_config.h
   platforms/netburner/nb-mqtt-broker/src/webfunctions.cpp
+
+The following file adapts the NNDK ACME servlet integration pattern from
+`examples/SSL/acmeservlet` (NetBurner NNDK 3.5+). It includes the NetBurner,
+Inc. copyright header and hardware-use license terms at the top of the source file.
+
+  platforms/netburner/nb-mqtt-broker/src/acme_service.cpp
+  platforms/netburner/nb-mqtt-broker/src/acme_service.h
 
 Use on NetBurner hardware is subject to the same NNDK example terms described
 above. Do not remove or replace NetBurner attribution when redistributing these

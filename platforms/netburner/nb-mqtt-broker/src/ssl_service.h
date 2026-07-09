@@ -35,7 +35,9 @@
 bool SslServiceInit();
 // RTOS task: waits for NTP time, generates a self-signed cert, and reboots on success.
 void SslCertWaitTask(void *pd);
-// True when a server certificate is loaded (HAL or user-installed).
+// True when a server certificate is loaded (HAL, user-installed, or ACME).
 bool SslCertReady();
+// Called when ACME enrollment completes — loads cert and starts HTTPS.
+void SslServiceOnAcmeCertReady();
 
 #endif

@@ -14,6 +14,8 @@ CPP_SRC = \
 	src/nvsettings.cpp \
 	src/webui_config.cpp \
 	src/ssl_service.cpp \
+	src/acme_config.cpp \
+	src/acme_service.cpp \
 	src/webfunctions.cpp \
 	src/mqtt_auth_store.cpp \
 	$(MQTT_BROKER_ROOT)/src/varint.cpp \

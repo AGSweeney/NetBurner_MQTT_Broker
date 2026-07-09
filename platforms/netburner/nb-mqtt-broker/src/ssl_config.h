@@ -32,6 +32,7 @@
 
 #define SSL_CERT_SOURCE_LIBRARY_DEFAULT ((uint8_t)0x00)
 #define SSL_CERT_SOURCE_USER_INSTALLED  ((uint8_t)0x01)
+#define SSL_CERT_SOURCE_ACME            ((uint8_t)0x02)
 
 // Max raw DER and PEM buffer sizes for cert/key uploads.
 #define SSL_CERTIFICATE_SIZE_MAX      ((2 * 1024) - 1)
@@ -57,6 +58,9 @@ enum HttpsServiceStatus : uint8_t {
     HTTPS_STATUS_CERT_FAILED = 3,
     HTTPS_STATUS_ACTIVE = 4,
     HTTPS_STATUS_USER_CERT = 5,
+    HTTPS_STATUS_ACME_PENDING = 6,
+    HTTPS_STATUS_ACME_ACTIVE = 7,
+    HTTPS_STATUS_ACME_FAILED = 8,
 };
 
 extern volatile HttpsServiceStatus gHttpsStatus;

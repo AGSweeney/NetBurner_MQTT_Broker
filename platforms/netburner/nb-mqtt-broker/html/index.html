@@ -221,6 +221,61 @@
 
     <div class="nb-card">
       <div class="nb-card-header">Certificates</div>
+      <div id="cert-source-section" hidden>
+        <div class="nb-form-row">
+          <label for="certSource">Certificate source</label>
+          <div>
+            <select id="certSource">
+              <option value="default">Auto-generated (self-signed)</option>
+              <option value="acme">Let's Encrypt (ACME)</option>
+              <option value="user">Custom upload (PEM)</option>
+            </select>
+            <span class="nb-help">SOMRT1061 only: publicly trusted TLS via Let's Encrypt.</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; padding-bottom:12px; align-items:center;">
+          <button class="nb-btn nb-btn-outline" type="button" id="applyCertSourceBtn">Apply Certificate Source</button>
+        </div>
+        <div id="acme-settings-section" hidden>
+          <div class="nb-form-row">
+            <label for="acmeCommonName">Common name</label>
+            <div>
+              <input id="acmeCommonName" type="text" placeholder="broker.example.com">
+              <span class="nb-help">Must match your public DNS name.</span>
+            </div>
+          </div>
+          <div class="nb-form-row">
+            <label for="acmeAltNames">Alt names</label>
+            <div>
+              <input id="acmeAltNames" type="text" placeholder="broker.example.com,www.example.com">
+              <span class="nb-help">Comma-separated subject alternative names (required by ACME).</span>
+            </div>
+          </div>
+          <div class="nb-form-row">
+            <label for="acmeEmail">Contact email</label>
+            <div>
+              <input id="acmeEmail" type="email" placeholder="admin@example.com">
+            </div>
+          </div>
+          <div class="nb-form-row">
+            <label for="acmeUseStaging">Use staging CA</label>
+            <div>
+              <select id="acmeUseStaging">
+                <option value="false">Production (Let's Encrypt)</option>
+                <option value="true">Staging (testing)</option>
+              </select>
+            </div>
+          </div>
+          <p class="nb-help" style="margin-bottom:12px;">
+            Requires NTP time sync, public DNS pointing at this device, and port <span class="nb-mono">80</span> reachable from the Internet for HTTP-01 validation.
+          </p>
+          <div style="display:flex; gap:10px; padding-bottom:12px; align-items:center;">
+            <button class="nb-btn nb-btn-primary" type="button" id="saveAcmeBtn">Save Let's Encrypt Settings</button>
+            <button class="nb-btn nb-btn-outline" type="button" id="retryAcmeBtn">Retry Enrollment</button>
+            <span class="nb-status" id="acmeStatus">Ready</span>
+          </div>
+        </div>
+      </div>
       <div id="regenerate-section" hidden>
         <h4>Auto-generated certificate</h4>
         <p class="nb-help" style="margin-bottom:12px;">
@@ -228,6 +283,7 @@
         </p>
         <button class="nb-btn nb-btn-outline" type="button" id="regenerateCertBtn">Regenerate Certificate</button>
       </div>
+      <div id="custom-upload-section">
       <h4>Custom certificate</h4>
       <div class="nb-form-row">
         <label for="certFile">Certificate</label>
@@ -247,6 +303,7 @@
           Remove the user-installed certificate. A new self-signed certificate will be generated on the next reboot.
         </p>
         <button class="nb-btn nb-btn-outline" type="button" id="resetCertBtn">Reset to Auto-Generated</button>
+      </div>
       </div>
     </div>
   </section>
@@ -672,7 +729,7 @@ async function loadSslStatus() {
     sslStatusInitialized = true;
 
     var status = sslConfig.httpsService && sslConfig.httpsService.status;
-    if (status === "waiting_for_time" || status === "generating") {
+    if (status === "waiting_for_time" || status === "generating" || status === "acme_pending") {
       if (!sslRefreshTimer) sslRefreshTimer = setInterval(loadSslStatus, 2000);
     } else if (sslRefreshTimer) {
       clearInterval(sslRefreshTimer);
@@ -684,10 +741,37 @@ async function loadSslStatus() {
   }
 }
 
+function updateCertSourceUi() {
+  var acmeSupported = sslConfig.acme && sslConfig.acme.supported;
+  var certSourceSection = document.getElementById("cert-source-section");
+  var acmeSection = document.getElementById("acme-settings-section");
+  var certSourceEl = document.getElementById("certSource");
+  if (certSourceSection) certSourceSection.hidden = !acmeSupported;
+  if (!acmeSupported) return;
+
+  var source = (sslConfig.certificate && sslConfig.certificate.source) || "default";
+  if (certSourceEl) certSourceEl.value = source;
+
+  if (acmeSection) acmeSection.hidden = (certSourceEl && certSourceEl.value !== "acme");
+  if (sslConfig.acme) {
+    var cn = document.getElementById("acmeCommonName");
+    var alt = document.getElementById("acmeAltNames");
+    var email = document.getElementById("acmeEmail");
+    var staging = document.getElementById("acmeUseStaging");
+    if (cn) cn.value = sslConfig.acme.commonName || "";
+    if (alt) alt.value = sslConfig.acme.altNames || "";
+    if (email) email.value = sslConfig.acme.email || "";
+    if (staging) staging.value = sslConfig.acme.useStaging ? "true" : "false";
+  }
+}
+
 function populateSslStatus(populateDropdowns) {
   var status = (sslConfig.httpsService && sslConfig.httpsService.status) || "unknown";
-  var isUserCert = sslConfig.certificate && sslConfig.certificate.source === "user";
-  var certLabel = isUserCert ? "user-installed certificate" : "auto-generated certificate";
+  var source = (sslConfig.certificate && sslConfig.certificate.source) || "default";
+  var isUserCert = source === "user";
+  var isAcme = source === "acme";
+  var certLabel = isUserCert ? "user-installed certificate"
+    : isAcme ? "Let's Encrypt certificate" : "auto-generated certificate";
   var banner = document.getElementById("https-service-status");
   var banners = {
     waiting_for_time: { cls: "nb-status-warn", text: "Waiting for valid time — HTTPS pending, " + certLabel },
@@ -695,6 +779,9 @@ function populateSslStatus(populateDropdowns) {
     failed:           { cls: "nb-status-err",  text: "Certificate generation failed — HTTPS unavailable" },
     active:           { cls: "nb-status-ok",   text: "HTTPS active · " + certLabel + " (also used for MQTTS)" },
     active_user_cert: { cls: "nb-status-ok",   text: "HTTPS active · " + certLabel + " (also used for MQTTS)" },
+    acme_pending:     { cls: "nb-status-warn", text: "Let's Encrypt enrollment in progress (state: " + ((sslConfig.acme && sslConfig.acme.state) || "pending") + ")" },
+    acme_active:      { cls: "nb-status-ok",   text: "HTTPS active · " + certLabel + " (also used for MQTTS)" },
+    acme_failed:      { cls: "nb-status-err",  text: "Let's Encrypt enrollment failed — check DNS and port 80" },
     disabled:         { cls: "nb-status-warn", text: "HTTPS disabled · " + certLabel }
   };
   var b = banners[status] || { cls: "", text: "Status: " + status };
@@ -714,10 +801,59 @@ function populateSslStatus(populateDropdowns) {
     }
   }
 
+  updateCertSourceUi();
+
   var regen = document.getElementById("regenerate-section");
-  if (regen) regen.hidden = isUserCert;
+  if (regen) regen.hidden = isUserCert || isAcme;
   var reset = document.getElementById("reset-section");
   if (reset) reset.hidden = !isUserCert;
+  var customUpload = document.getElementById("custom-upload-section");
+  if (customUpload) customUpload.hidden = isAcme;
+}
+
+async function saveAcmeSettings() {
+  var certSource = document.getElementById("certSource").value;
+  if (certSource === "user") {
+    setSslStatus("acmeStatus", "nb-status-warn", "Upload a PEM certificate below");
+    return;
+  }
+  if (certSource === "default" && !confirm("Switch to auto-generated certificate?\n\nExisting ACME or HAL cert will be erased. Reboot required.")) {
+    return;
+  }
+  setSslStatus("acmeStatus", "nb-status-info", "Saving…");
+  try {
+    var r = await fetch("api/ssl/acme", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        certSource: certSource,
+        commonName: document.getElementById("acmeCommonName").value.trim(),
+        altNames: document.getElementById("acmeAltNames").value.trim(),
+        email: document.getElementById("acmeEmail").value.trim(),
+        useStaging: document.getElementById("acmeUseStaging").value === "true"
+      })
+    });
+    var data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.message || "Save failed");
+    setSslStatus("acmeStatus", "nb-status-ok", "Saved — rebooting…");
+    await triggerReboot();
+  } catch (e) {
+    setSslStatus("acmeStatus", "nb-status-err", String(e.message || e));
+  }
+}
+
+async function retryAcmeEnrollment() {
+  if (!confirm("Restart Let's Encrypt enrollment?\n\nThe device will reboot.")) return;
+  setSslStatus("acmeStatus", "nb-status-info", "Working…");
+  try {
+    var r = await fetch("api/ssl/acme/retry", { method: "POST", headers: { "Content-Type": "application/json" }, body: "" });
+    var data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.message || "Retry failed");
+    setSslStatus("acmeStatus", "nb-status-ok", "Rebooting…");
+    await triggerReboot();
+  } catch (e) {
+    setSslStatus("acmeStatus", "nb-status-err", String(e.message || e));
+  }
 }
 
 async function saveSslProtocols() {
@@ -933,6 +1069,13 @@ document.getElementById("sslProtocolsSaveBtn").addEventListener("click", saveSsl
 document.getElementById("regenerateCertBtn").addEventListener("click", regenerateCert);
 document.getElementById("resetCertBtn").addEventListener("click", resetCert);
 document.getElementById("installCertBtn").addEventListener("click", installCert);
+document.getElementById("certSource").addEventListener("change", function () {
+  var acmeSection = document.getElementById("acme-settings-section");
+  if (acmeSection) acmeSection.hidden = (this.value !== "acme");
+});
+document.getElementById("applyCertSourceBtn").addEventListener("click", saveAcmeSettings);
+document.getElementById("saveAcmeBtn").addEventListener("click", saveAcmeSettings);
+document.getElementById("retryAcmeBtn").addEventListener("click", retryAcmeEnrollment);
 document.getElementById("mqttAuthSettingsBtn").addEventListener("click", saveMqttAuthSettings);
 document.getElementById("mqttAddUserBtn").addEventListener("click", addMqttUser);
 
