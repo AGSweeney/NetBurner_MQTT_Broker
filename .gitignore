@@ -1,5 +1,6 @@
 # Host unit-test build (CMake / MSVC)
 libs/mqtt_broker/build/
+libs/mqtt_broker/scripts/
 /build/
 # NetBurner firmware build output
 platforms/netburner/nb-mqtt-broker/obj/
