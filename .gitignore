@@ -1,17 +1,21 @@
 # Host unit-test build (CMake / MSVC)
 libs/mqtt_broker/build/
-
+/build/
 # NetBurner firmware build output
 platforms/netburner/nb-mqtt-broker/obj/
 platforms/netburner/libs/
-*.o
 *.d
+
+# Device test scripts and tooling — not required for the build
+# (python/node/powershell bench, soak, conformance, and verify tools)
+platforms/netburner/scripts/
+
+# Test result artifacts, wherever they are generated
+stability_report_*.json
+mqtt_conformance_results.json
 
 # Generated from html/ by comphtml (NetBurner make)
 platforms/netburner/nb-mqtt-broker/src/htmldata.cpp
-
-# Node device-test dependencies (run npm install in platforms/netburner/scripts)
-platforms/netburner/scripts/node_modules/
 
 # IDE / editor
 .vs/

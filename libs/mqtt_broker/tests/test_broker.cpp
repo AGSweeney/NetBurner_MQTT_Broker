@@ -982,6 +982,263 @@ static void test_transport_slot_released_on_eof()
     assert(broker.connected_count() == 1);
 }
 
+// ---- MQTT 3.1.1 (protocol level 4) interop ----
+
+static std::vector<uint8_t> build_connect_v4(const char *client_id, uint16_t keep_alive = 60,
+                                             bool clean_session = true)
+{
+    std::vector<uint8_t> body;
+    const char proto[] = {'M', 'Q', 'T', 'T'};
+    body.push_back(0x00);
+    body.push_back(0x04);
+    body.insert(body.end(), proto, proto + 4);
+    body.push_back(0x04);  // protocol level 4 = MQTT 3.1.1
+    body.push_back(clean_session ? 0x02 : 0x00);
+    body.push_back(static_cast<uint8_t>((keep_alive >> 8) & 0xFFu));
+    body.push_back(static_cast<uint8_t>(keep_alive & 0xFFu));
+    // No properties section in 3.1.1 — client id payload follows directly.
+    size_t cid_len = std::strlen(client_id);
+    body.push_back(static_cast<uint8_t>((cid_len >> 8) & 0xFFu));
+    body.push_back(static_cast<uint8_t>(cid_len & 0xFFu));
+    body.insert(body.end(), client_id, client_id + cid_len);
+
+    uint8_t rl[4];
+    size_t rl_size = varint_encode(static_cast<uint32_t>(body.size()), rl, sizeof(rl));
+    std::vector<uint8_t> pkt;
+    pkt.push_back(0x10);
+    pkt.insert(pkt.end(), rl, rl + rl_size);
+    pkt.insert(pkt.end(), body.begin(), body.end());
+    return pkt;
+}
+
+static std::vector<uint8_t> build_subscribe_v4(uint16_t pid, const char *filter, uint8_t qos)
+{
+    std::vector<uint8_t> body;
+    body.push_back(static_cast<uint8_t>((pid >> 8) & 0xFFu));
+    body.push_back(static_cast<uint8_t>(pid & 0xFFu));
+    // No property length byte in 3.1.1.
+    size_t flen = std::strlen(filter);
+    body.push_back(static_cast<uint8_t>((flen >> 8) & 0xFFu));
+    body.push_back(static_cast<uint8_t>(flen & 0xFFu));
+    body.insert(body.end(), filter, filter + flen);
+    body.push_back(qos);
+
+    uint8_t rl[4];
+    size_t rl_size = varint_encode(static_cast<uint32_t>(body.size()), rl, sizeof(rl));
+    std::vector<uint8_t> pkt;
+    pkt.push_back(0x82);
+    pkt.insert(pkt.end(), rl, rl + rl_size);
+    pkt.insert(pkt.end(), body.begin(), body.end());
+    return pkt;
+}
+
+static std::vector<uint8_t> build_publish_v4(const char *topic, const char *payload,
+                                             uint8_t qos = 0, uint16_t pid = 0)
+{
+    std::vector<uint8_t> body;
+    size_t tlen = std::strlen(topic);
+    body.push_back(static_cast<uint8_t>((tlen >> 8) & 0xFFu));
+    body.push_back(static_cast<uint8_t>(tlen & 0xFFu));
+    body.insert(body.end(), topic, topic + tlen);
+    if (qos > 0) {
+        body.push_back(static_cast<uint8_t>((pid >> 8) & 0xFFu));
+        body.push_back(static_cast<uint8_t>(pid & 0xFFu));
+    }
+    // No property length byte in 3.1.1.
+    size_t plen = std::strlen(payload);
+    body.insert(body.end(), payload, payload + plen);
+
+    uint8_t rl[4];
+    size_t rl_size = varint_encode(static_cast<uint32_t>(body.size()), rl, sizeof(rl));
+    std::vector<uint8_t> pkt;
+    pkt.push_back(0x30 | static_cast<uint8_t>((qos & 0x03u) << 1));
+    pkt.insert(pkt.end(), rl, rl + rl_size);
+    pkt.insert(pkt.end(), body.begin(), body.end());
+    return pkt;
+}
+
+static void test_v4_connect_and_connack_format()
+{
+    Broker broker;
+    MockLink link = {{}, {}, 0, true, false};
+    uint16_t tid = broker.attach_transport({&link, {mock_read, mock_write, mock_close}, true});
+
+    link.tx = build_connect_v4("v4client");
+    pump(broker, tid, link);
+    assert(broker.connected_count() == 1);
+    // MQTT 3.1.1 CONNACK: exactly 4 bytes — 0x20 0x02 <ack flags> <return code>.
+    assert(link.rx.size() == 4);
+    assert(link.rx[0] == 0x20 && link.rx[1] == 0x02 && link.rx[2] == 0x00 && link.rx[3] == 0x00);
+
+    // PINGREQ/PINGRESP unchanged in 3.1.1.
+    link.rx.clear();
+    link.tx = {0xC0, 0x00};
+    link.read_off = 0;
+    pump(broker, tid, link);
+    assert(link.rx.size() == 2 && link.rx[0] == 0xD0 && link.rx[1] == 0x00);
+}
+
+static void test_v4_pub_sub_routing()
+{
+    Broker broker;
+    MockLink pub = {{}, {}, 0, true, false};
+    MockLink sub = {{}, {}, 0, true, false};
+    uint16_t pub_tid = broker.attach_transport({&pub, {mock_read, mock_write, mock_close}, true});
+    uint16_t sub_tid = broker.attach_transport({&sub, {mock_read, mock_write, mock_close}, true});
+
+    pub.tx = build_connect_v4("v4pub");
+    pump(broker, pub_tid, pub);
+    sub.tx = build_connect_v4("v4sub");
+    pump(broker, sub_tid, sub);
+
+    sub.rx.clear();
+    sub.tx = build_subscribe_v4(1, "v4/topic", 0x00);
+    sub.read_off = 0;
+    pump(broker, sub_tid, sub);
+    // 3.1.1 SUBACK: 0x90 0x03 <pid hi> <pid lo> <granted qos> — no property byte.
+    assert(sub.rx.size() == 5);
+    assert(sub.rx[0] == 0x90 && sub.rx[1] == 0x03);
+    assert(sub.rx[2] == 0x00 && sub.rx[3] == 0x01 && sub.rx[4] == 0x00);
+
+    sub.rx.clear();
+    pub.tx = build_publish_v4("v4/topic", "hi311");
+    pub.read_off = 0;
+    pump(broker, pub_tid, pub);
+    broker.drain_tx(sub_tid);
+
+    // Delivered 3.1.1 PUBLISH: fh 0x30, RL = 2 + tlen + payload (no property byte).
+    const char expected_topic[] = "v4/topic";
+    size_t tlen = sizeof(expected_topic) - 1;
+    assert(sub.rx.size() == 2 + 2 + tlen + 5);
+    assert(sub.rx[0] == 0x30);
+    assert(sub.rx[1] == 2 + tlen + 5);
+    assert(std::memcmp(sub.rx.data() + 4, expected_topic, tlen) == 0);
+    assert(std::memcmp(sub.rx.data() + 4 + tlen, "hi311", 5) == 0);
+}
+
+static void test_v4_qos1_puback_format()
+{
+    Broker broker;
+    MockLink pub = {{}, {}, 0, true, false};
+    uint16_t tid = broker.attach_transport({&pub, {mock_read, mock_write, mock_close}, true});
+    pub.tx = build_connect_v4("v4qos1");
+    pump(broker, tid, pub);
+
+    pub.rx.clear();
+    pub.tx = build_publish_v4("v4/q1", "x", 1, 0x1234);
+    pub.read_off = 0;
+    pump(broker, tid, pub);
+    // 3.1.1 PUBACK: 0x40 0x02 <pid hi> <pid lo> — no reason code, no properties.
+    assert(pub.rx.size() == 4);
+    assert(pub.rx[0] == 0x40 && pub.rx[1] == 0x02);
+    assert(pub.rx[2] == 0x12 && pub.rx[3] == 0x34);
+}
+
+static void test_cross_version_routing()
+{
+    Broker broker;
+    MockLink v5pub = {{}, {}, 0, true, false};
+    MockLink v4sub = {{}, {}, 0, true, false};
+    MockLink v5sub = {{}, {}, 0, true, false};
+    uint16_t v5pub_tid =
+        broker.attach_transport({&v5pub, {mock_read, mock_write, mock_close}, true});
+    uint16_t v4sub_tid =
+        broker.attach_transport({&v4sub, {mock_read, mock_write, mock_close}, true});
+    uint16_t v5sub_tid =
+        broker.attach_transport({&v5sub, {mock_read, mock_write, mock_close}, true});
+
+    v5pub.tx = build_connect("v5pub");
+    pump(broker, v5pub_tid, v5pub);
+    v4sub.tx = build_connect_v4("v4sub");
+    pump(broker, v4sub_tid, v4sub);
+    v5sub.tx = build_connect("v5sub");
+    pump(broker, v5sub_tid, v5sub);
+
+    v4sub.rx.clear();
+    v4sub.tx = build_subscribe_v4(1, "mix/#", 0x00);
+    v4sub.read_off = 0;
+    pump(broker, v4sub_tid, v4sub);
+
+    v5sub.rx.clear();
+    v5sub.tx = build_subscribe(2, "mix/#", 0x00);
+    v5sub.read_off = 0;
+    pump(broker, v5sub_tid, v5sub);
+
+    // MQTT 5 publisher with a user property → both subscribers get the payload;
+    // the 3.1.1 subscriber's copy must have no property section.
+    std::vector<uint8_t> props;
+    props.push_back(UserProperty);
+    const char key[] = "k";
+    const char val[] = "v";
+    props.push_back(0x00);
+    props.push_back(1);
+    props.insert(props.end(), key, key + 1);
+    props.push_back(0x00);
+    props.push_back(1);
+    props.insert(props.end(), val, val + 1);
+
+    v4sub.rx.clear();
+    v5sub.rx.clear();
+    v5pub.tx = build_publish_ex("mix/data", "zz", 0, 0, props);
+    v5pub.read_off = 0;
+    pump(broker, v5pub_tid, v5pub);
+    broker.drain_tx(v4sub_tid);
+    broker.drain_tx(v5sub_tid);
+
+    const char topic[] = "mix/data";
+    size_t tlen = sizeof(topic) - 1;
+    // v4 copy: fh + rl + topic len/name + payload only.
+    assert(v4sub.rx.size() == 2 + 2 + tlen + 2);
+    assert(v4sub.rx[0] == 0x30);
+    assert(std::memcmp(v4sub.rx.data() + 4 + tlen, "zz", 2) == 0);
+    // v5 copy carries the forwarded user property, so it is strictly larger.
+    assert(v5sub.rx.size() > v4sub.rx.size());
+    assert(contains_seq(v5sub.rx, {static_cast<uint8_t>('k')}));
+
+    // Reverse direction: 3.1.1 publisher → MQTT 5 subscriber still delivers.
+    MockLink v4pub = {{}, {}, 0, true, false};
+    uint16_t v4pub_tid =
+        broker.attach_transport({&v4pub, {mock_read, mock_write, mock_close}, true});
+    v4pub.tx = build_connect_v4("v4pub");
+    pump(broker, v4pub_tid, v4pub);
+
+    v5sub.rx.clear();
+    v4sub.rx.clear();
+    v4pub.tx = build_publish_v4("mix/back", "yo");
+    v4pub.read_off = 0;
+    pump(broker, v4pub_tid, v4pub);
+    broker.drain_tx(v5sub_tid);
+    broker.drain_tx(v4sub_tid);
+    assert(contains_seq(v5sub.rx, {static_cast<uint8_t>('y'), static_cast<uint8_t>('o')}));
+    assert(contains_seq(v4sub.rx, {static_cast<uint8_t>('y'), static_cast<uint8_t>('o')}));
+}
+
+static void test_v4_clean_session_semantics()
+{
+    Broker broker;
+    MockLink link = {{}, {}, 0, true, false};
+    uint16_t tid = broker.attach_transport({&link, {mock_read, mock_write, mock_close}, true});
+    // CleanSession=0: session must survive disconnect (no expiry in 3.1.1).
+    link.tx = build_connect_v4("v4persist", 60, false);
+    pump(broker, tid, link);
+    link.tx = build_subscribe_v4(1, "keep/#", 0x01);
+    link.read_off = 0;
+    pump(broker, tid, link);
+
+    broker.detach_transport(tid);
+    broker.tick(1000000);  // would expire any finite deadline
+    assert(broker.debug_session_present("v4persist"));
+
+    // Reconnect with CleanSession=0 → session present flag set in CONNACK.
+    MockLink again = {{}, {}, 0, true, false};
+    uint16_t tid2 = broker.attach_transport({&again, {mock_read, mock_write, mock_close}, true});
+    again.tx = build_connect_v4("v4persist", 60, false);
+    pump(broker, tid2, again);
+    assert(again.rx.size() == 4);
+    assert(again.rx[2] == 0x01);  // session present
+    assert(again.rx[3] == 0x00);
+}
+
 static void test_keepalive_disconnect()
 {
     Broker broker;
@@ -1016,5 +1273,10 @@ int main()
     test_fragmented_connect();
     test_transport_slot_released_on_eof();
     test_keepalive_disconnect();
+    test_v4_connect_and_connack_format();
+    test_v4_pub_sub_routing();
+    test_v4_qos1_puback_format();
+    test_cross_version_routing();
+    test_v4_clean_session_semantics();
     return 0;
 }

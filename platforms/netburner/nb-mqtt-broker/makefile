@@ -16,6 +16,7 @@ CPP_SRC = \
 	src/ssl_service.cpp \
 	src/acme_config.cpp \
 	src/acme_service.cpp \
+	src/interface_stats_ws.cpp \
 	src/webfunctions.cpp \
 	src/mqtt_auth_store.cpp \
 	$(MQTT_BROKER_ROOT)/src/varint.cpp \
@@ -43,7 +44,7 @@ CPP_SRC += src/htmldata.cpp
 src/htmldata.cpp : $(wildcard html/*.*)
 	comphtml html -osrc/htmldata.cpp
 
-EXTRACPPFLAGS += -I$(MQTT_BROKER_ROOT)/include -DPLATFORM_$(PLATFORM)
+EXTRACPPFLAGS += -I$(MQTT_BROKER_ROOT)/include -DPLATFORM_$(PLATFORM) -DENABLE_SNMP
 
 # EFFS-STD: RT platforms (SOMRT1061/MODRT1171) mount flash in the platform library.
 # ColdFire and SAME70 targets need libStdFFile, COMPCODEFLAGS, and fs_main() in UserMain.

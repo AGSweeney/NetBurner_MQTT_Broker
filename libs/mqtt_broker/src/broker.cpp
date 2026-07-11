@@ -134,8 +134,10 @@ uint16_t Broker::attach_transport(const BrokerTransport &transport)
             connections_[i].session = NULL_SESSION;
             if (connections_[i].parser != nullptr) {
                 connections_[i].parser->reset();
+                connections_[i].parser->reset_protocol_level();
             }
             connections_[i].attached_tick = current_tick_;
+            connections_[i].protocol_level = 5;
             return static_cast<uint16_t>(i);
         }
     }
@@ -221,7 +223,25 @@ void Broker::touch_keepalive(uint16_t transport_id, uint32_t now_ticks)
 
 void Broker::disconnect_transport(uint16_t transport_id, bool slow_consumer)
 {
-    if (transport_id >= BrokerLimits::MaxTcpClients || !connections_[transport_id].in_use) {
+    if (transport_id >= BrokerLimits::MaxTcpClients) {
+        return;
+    }
+
+    if (!connections_[transport_id].in_use) {
+        // Transport slot already idle — session may still reference this id (zombie).
+        for (int i = 0; i < BrokerLimits::MaxTcpClients; ++i) {
+            SessionRecord &sr = sessions_[i];
+            if (sr.state == SessionState::Connected && sr.transport_id == transport_id) {
+                if (metrics_.clients_connected > 0) {
+                    metrics_.clients_connected--;
+                }
+                begin_offline_session(&sr, slow_consumer ? 0u : 0xFFFFFFFFu);
+                sr.transport_id = 0xFFFF;
+            }
+        }
+        if (slow_consumer) {
+            metrics_.slow_consumer_disconnects++;
+        }
         return;
     }
 
@@ -253,7 +273,10 @@ void Broker::disconnect_transport(uint16_t transport_id, bool slow_consumer)
         if (metrics_.clients_connected > 0) {
             metrics_.clients_connected--;
         }
-        begin_offline_session(s, 0xFFFFFFFFu);
+        // Slow consumers are dropped with session expiry 0 so subscriptions and
+        // the session slot are reclaimed instead of lingering Offline with QoS 0
+        // filters that block routing work but never receive delivery.
+        begin_offline_session(s, slow_consumer ? 0u : 0xFFFFFFFFu);
         s->transport_id = 0xFFFF;
     }
     c.session = NULL_SESSION;
@@ -392,12 +415,21 @@ void Broker::begin_offline_session(SessionRecord *s, uint32_t disconnect_expiry_
     }
 
     s->state = SessionState::Offline;
-    s->session_expiry_deadline_tick = current_tick_ + expiry;
+    // 0xFFFFFFFF (MQTT 5 "never" / MQTT 3.1.1 CleanSession 0) and any interval
+    // that would wrap the tick counter both mean no expiry deadline.
+    const bool never_expires = expiry >= SESSION_TICK_NONE - current_tick_;
+    s->session_expiry_deadline_tick =
+        never_expires ? SESSION_TICK_NONE : current_tick_ + expiry;
     if (!s->suppress_will && s->will.valid) {
         uint32_t delay = s->will_delay_interval;
-        if (delay == 0 || delay >= expiry) {
+        if (delay >= expiry && !never_expires) {
+            // Delay reaches past session end: will fires when the session expires.
             s->will_fire_deadline_tick = s->session_expiry_deadline_tick;
+        } else if (delay >= SESSION_TICK_NONE - current_tick_) {
+            s->will_fire_deadline_tick = SESSION_TICK_NONE;
         } else {
+            // Delay 0 fires on the next tick (§3.1.3.2.2: publish at the earlier
+            // of will-delay elapsed or session end).
             s->will_fire_deadline_tick = current_tick_ + delay;
         }
     }
@@ -426,11 +458,13 @@ void Broker::tick_offline_sessions()
 void Broker::send_connack(uint16_t transport_id, ReasonCode reason, bool session_present,
                           const char *assigned_client_id, uint16_t server_keep_alive)
 {
+    if (transport_id >= BrokerLimits::MaxTcpClients) {
+        return;
+    }
     uint8_t buf[192];
     size_t n = encode_connack(buf, sizeof(buf), reason, session_present, assigned_client_id,
-                              server_keep_alive);
-    if (n == 0 || transport_id >= BrokerLimits::MaxTcpClients ||
-        connections_[transport_id].transport.ops.write == nullptr) {
+                              server_keep_alive, connections_[transport_id].protocol_level);
+    if (n == 0 || connections_[transport_id].transport.ops.write == nullptr) {
         return;
     }
     int wrote = connections_[transport_id].transport.ops.write(
@@ -451,9 +485,14 @@ void Broker::send_connack(uint16_t transport_id, ReasonCode reason, bool session
 
 void Broker::send_disconnect(uint16_t transport_id, ReasonCode reason)
 {
+    if (transport_id >= BrokerLimits::MaxTcpClients ||
+        connections_[transport_id].protocol_level == 4) {
+        // MQTT 3.1.1 has no server-to-client DISCONNECT; just close the socket.
+        return;
+    }
     uint8_t buf[8];
     size_t n = encode_disconnect(buf, sizeof(buf), reason);
-    if (n > 0 && transport_id < BrokerLimits::MaxTcpClients &&
+    if (n > 0 &&
         connections_[transport_id].transport.ops.write != nullptr) {
         connections_[transport_id].transport.ops.write(connections_[transport_id].transport.ctx,
                                                        buf, n);
@@ -516,29 +555,45 @@ bool Broker::write_bytes(uint16_t transport_id, const uint8_t *data, size_t len)
 
 bool Broker::send_puback(uint16_t transport_id, uint16_t packet_id, ReasonCode reason)
 {
+    if (transport_id >= BrokerLimits::MaxTcpClients) {
+        return false;
+    }
     uint8_t buf[16];
-    size_t n = encode_puback(buf, sizeof(buf), packet_id, reason);
+    size_t n = encode_puback(buf, sizeof(buf), packet_id, reason,
+                             connections_[transport_id].protocol_level);
     return n > 0 && write_bytes(transport_id, buf, n);
 }
 
 bool Broker::send_pubrec(uint16_t transport_id, uint16_t packet_id, ReasonCode reason)
 {
+    if (transport_id >= BrokerLimits::MaxTcpClients) {
+        return false;
+    }
     uint8_t buf[16];
-    size_t n = encode_pubrec(buf, sizeof(buf), packet_id, reason);
+    size_t n = encode_pubrec(buf, sizeof(buf), packet_id, reason,
+                             connections_[transport_id].protocol_level);
     return n > 0 && write_bytes(transport_id, buf, n);
 }
 
 bool Broker::send_pubrel(uint16_t transport_id, uint16_t packet_id, ReasonCode reason)
 {
+    if (transport_id >= BrokerLimits::MaxTcpClients) {
+        return false;
+    }
     uint8_t buf[16];
-    size_t n = encode_pubrel(buf, sizeof(buf), packet_id, reason);
+    size_t n = encode_pubrel(buf, sizeof(buf), packet_id, reason,
+                             connections_[transport_id].protocol_level);
     return n > 0 && write_bytes(transport_id, buf, n);
 }
 
 bool Broker::send_pubcomp(uint16_t transport_id, uint16_t packet_id, ReasonCode reason)
 {
+    if (transport_id >= BrokerLimits::MaxTcpClients) {
+        return false;
+    }
     uint8_t buf[16];
-    size_t n = encode_pubcomp(buf, sizeof(buf), packet_id, reason);
+    size_t n = encode_pubcomp(buf, sizeof(buf), packet_id, reason,
+                              connections_[transport_id].protocol_level);
     return n > 0 && write_bytes(transport_id, buf, n);
 }
 
@@ -722,7 +777,8 @@ bool Broker::enqueue_retransmit(uint16_t transport_id, const OutboundInflightEnt
     msg_pool_.props(entry.message, &props_len);
     bool has_expiry = msg_pool_.expiry_interval(entry.message) > 0;
     size_t est = estimate_publish_size(topic, payload_len, entry.retain_flag, entry.delivery_qos,
-                                       props_len, has_expiry);
+                                       props_len, has_expiry,
+                                       connections_[transport_id].protocol_level);
     if (est == 0 ||
         tx->logical_bytes() + static_cast<uint32_t>(est) > BrokerLimits::TxLogicalPerClient ||
         global_logical_tx_ + static_cast<uint32_t>(est) >
@@ -762,10 +818,14 @@ bool Broker::enqueue_delivery(uint16_t transport_id, SessionHandle session, cons
                               MessageHandle msg, size_t payload_len, uint8_t delivery_qos,
                               bool retain_flag)
 {
+    SessionRecord *s = session_record(session);
     if (transport_id >= BrokerLimits::MaxTcpClients || !connections_[transport_id].in_use) {
+        if (s != nullptr && s->state == SessionState::Connected &&
+            s->transport_id == transport_id) {
+            disconnect_transport(transport_id, true);
+        }
         return false;
     }
-    SessionRecord *s = session_record(session);
     if (s == nullptr || s->state != SessionState::Connected) {
         return false;
     }
@@ -794,8 +854,8 @@ bool Broker::enqueue_delivery(uint16_t transport_id, SessionHandle session, cons
     size_t props_len = 0;
     msg_pool_.props(msg, &props_len);
     bool has_expiry = msg_pool_.expiry_interval(msg) > 0;
-    size_t est =
-        estimate_publish_size(topic, payload_len, retain_flag, delivery_qos, props_len, has_expiry);
+    size_t est = estimate_publish_size(topic, payload_len, retain_flag, delivery_qos, props_len,
+                                       has_expiry, connections_[transport_id].protocol_level);
     if (est > s->client_max_packet_size) {
         metrics_.dropped_too_large++;
         return false;
@@ -806,15 +866,33 @@ bool Broker::enqueue_delivery(uint16_t transport_id, SessionHandle session, cons
         return false;
     }
 
-    if (tx->logical_bytes() + static_cast<uint32_t>(est) > BrokerLimits::TxLogicalPerClient ||
-        global_logical_tx_ + static_cast<uint32_t>(est) >
-            static_cast<uint32_t>(BrokerLimits::TxLogicalTotal)) {
-        disconnect_transport(transport_id, true);
-        return false;
+    auto tx_over_budget = [&]() {
+        return tx->full() ||
+               tx->logical_bytes() + static_cast<uint32_t>(est) >
+                   BrokerLimits::TxLogicalPerClient ||
+               global_logical_tx_ + static_cast<uint32_t>(est) >
+                   static_cast<uint32_t>(BrokerLimits::TxLogicalTotal);
+    };
+
+    if (tx_over_budget()) {
+        // Burst absorption: the queue may be full only because the event loop
+        // hasn't drained this connection yet this pass. Flush to the socket
+        // before declaring the consumer slow — only a consumer whose TCP send
+        // buffer is also full is genuinely stuck.
+        drain_tx(transport_id);
+        if (!connections_[transport_id].in_use) {
+            return false;  // drain hit a write error and disconnected
+        }
+        if (tx_over_budget()) {
+            disconnect_transport(transport_id, true);
+            return false;
+        }
     }
 
     TopicHandle th = topic_intern_.intern(topic);
     if (!topic_intern_.valid(th)) {
+        metrics_.pool_exhaustion++;
+        disconnect_transport(transport_id, true);
         return false;
     }
 
@@ -830,6 +908,8 @@ bool Broker::enqueue_delivery(uint16_t transport_id, SessionHandle session, cons
 
     if (!msg_pool_.msg_acquire(msg)) {
         topic_intern_.release(th);
+        metrics_.pool_exhaustion++;
+        disconnect_transport(transport_id, true);
         return false;
     }
 
@@ -856,6 +936,9 @@ void Broker::route_publish(uint16_t publisher_transport, const char *topic, uint
     // never leaks an intern reference.
     TopicHandle th = topic_intern_.intern(topic);
     if (!topic_intern_.valid(th)) {
+        // Intern pool exhausted — the publish is accepted but cannot be routed.
+        // Count it so a stuck TX path is visible in metrics instead of silent.
+        metrics_.pool_exhaustion++;
         return;
     }
 
@@ -967,6 +1050,12 @@ void Broker::handle_connect(uint16_t transport_id, const ParsedPacket &pkt)
         }
     };
 
+    // Latch before any CONNACK (accept or reject) so it is encoded in the
+    // client's wire format. The parser guarantees level 4 or 5 here.
+    if (transport_id < BrokerLimits::MaxTcpClients) {
+        connections_[transport_id].protocol_level = pkt.protocol_level;
+    }
+
     AuthCheckFn auth = broker_auth_handler();
     if (auth != nullptr) {
         ReasonCode auth_rc = auth(pkt.client_id, pkt.has_username ? pkt.username : nullptr,
@@ -1059,17 +1148,23 @@ void Broker::handle_connect(uint16_t transport_id, const ParsedPacket &pkt)
     s->client_id[sizeof(s->client_id) - 1] = '\0';
     uint16_t negotiated_keepalive = pkt.keep_alive;
     const int max_keep_alive = broker_policy().max_keep_alive_sec;
-    if (max_keep_alive > 0) {
+    if (pkt.protocol_level >= 5 && max_keep_alive > 0) {
         if (negotiated_keepalive == 0 ||
             negotiated_keepalive > static_cast<uint16_t>(max_keep_alive)) {
             negotiated_keepalive = static_cast<uint16_t>(max_keep_alive);
         }
     }
+    // MQTT 3.1.1 has no Server Keep Alive property, so the client's value must
+    // be honored as-is (clamping would cause spurious keep-alive disconnects).
     s->keep_alive_sec = negotiated_keepalive;
     s->client_max_packet_size = pkt.client_max_packet_size;
     s->client_receive_maximum = pkt.client_receive_maximum;
     s->clean_start = pkt.clean_start || server_assigned;
-    s->session_expiry_interval = pkt.session_expiry_interval;
+    // MQTT 3.1.1 §3.1.2.4: CleanSession 0 means the session persists until the
+    // client reconnects (no expiry); CleanSession 1 ends it at disconnect.
+    s->session_expiry_interval = (pkt.protocol_level == 4)
+                                     ? (pkt.clean_start ? 0u : 0xFFFFFFFFu)
+                                     : pkt.session_expiry_interval;
     s->will_delay_interval = pkt.will_delay_interval;
     s->session_expiry_deadline_tick = SESSION_TICK_NONE;
     s->will_fire_deadline_tick = SESSION_TICK_NONE;
@@ -1332,7 +1427,8 @@ void Broker::handle_subscribe(uint16_t transport_id, const ParsedPacket &pkt)
     }
 
     uint8_t buf[64];
-    size_t n = encode_suback(buf, sizeof(buf), pkt.packet_id, rcs, pkt.subscribe_count);
+    size_t n = encode_suback(buf, sizeof(buf), pkt.packet_id, rcs, pkt.subscribe_count,
+                             connections_[transport_id].protocol_level);
     if (n > 0 && connections_[transport_id].transport.ops.write != nullptr) {
         connections_[transport_id].transport.ops.write(connections_[transport_id].transport.ctx,
                                                        buf, n);
@@ -1354,7 +1450,8 @@ void Broker::handle_unsubscribe(uint16_t transport_id, const ParsedPacket &pkt)
     }
 
     uint8_t buf[64];
-    size_t n = encode_unsuback(buf, sizeof(buf), pkt.packet_id, rcs, pkt.subscribe_count);
+    size_t n = encode_unsuback(buf, sizeof(buf), pkt.packet_id, rcs, pkt.subscribe_count,
+                               connections_[transport_id].protocol_level);
     if (n > 0 && connections_[transport_id].transport.ops.write != nullptr) {
         connections_[transport_id].transport.ops.write(connections_[transport_id].transport.ctx,
                                                        buf, n);
@@ -1521,7 +1618,7 @@ void Broker::drain_tx(uint16_t transport_id)
         size_t wrote = encode_publish(out, sizeof(out), topic, pd.retain_flag, pd.delivery_qos,
                                       pd.packet_id, pd.dup_flag, &msg_pool_, pd.message,
                                       payload_len, pd.encoded_offset, has_expiry,
-                                      expiry_remaining);
+                                      expiry_remaining, c.protocol_level);
         if (wrote == 0) {
             uint32_t released = 0;
             complete_tx_delivery(transport_id, &pd);

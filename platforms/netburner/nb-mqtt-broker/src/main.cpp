@@ -6,6 +6,7 @@
 
 #include "acme_service.h"
 #include "broker_server.hpp"
+#include "interface_stats_ws.h"
 #include "ssl_service.h"
 
 #include <config_server.h>
@@ -49,6 +50,7 @@ void UserMain(void *pd)
     }
 
     BrokerServerInit();
+    InterfaceStatsWsInit();
     OSSimpleTaskCreatewName(BrokerServerTask, OSGetNextPrio(OSNextPrio::Above), "MQTTBroker");
 
     while (1) {

@@ -364,8 +364,22 @@ input[disabled] {
   margin-bottom: 16px;
 }
 
+.nb-chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.nb-chart-wrap {
+  position: relative;
+  height: 220px;
+}
+.nb-chart-grid h4 {
+  margin-top: 0;
+}
+
 @media (max-width: 720px) {
   .nb-grid-2, .nb-grid-3 { grid-template-columns: 1fr; }
+  .nb-chart-grid { grid-template-columns: 1fr; }
   .nb-form-row { grid-template-columns: 1fr; gap: 4px; }
   .nb-form-row > label { padding-top: 0; }
   .nb-header h1 { font-size: 15px; flex: 1 1 100%; order: 3; }

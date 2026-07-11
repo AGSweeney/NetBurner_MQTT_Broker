@@ -19,10 +19,10 @@ struct BrokerLimits {
     static constexpr int OfflineQueuePerClient = 16;
     static constexpr int RetainedBytesTotal = 65536;
     static constexpr int ParserReadChunk   = 1024;
-    static constexpr int TxLogicalPerClient = 32768;
+    static constexpr int TxLogicalPerClient = 131072;
     static constexpr int TxLogicalTotal    = 262144;
     static constexpr int PayloadBlockSize  = 512;
-    static constexpr int PayloadBlockCount = 256;   // 128 KB payload pool (aligned with NANO)
+    static constexpr int PayloadBlockCount = 384;   // 192 KB payload pool
     static constexpr int MaxInternedTopics = 256;
     static constexpr int MaxInternedBytes  = 32768;
     static constexpr int TlsHandshakeSlots = 1;
@@ -30,7 +30,7 @@ struct BrokerLimits {
     static constexpr int Pbkdf2SaltBytes   = 16;
     static constexpr int Pbkdf2KeyBytes    = 32;
     static constexpr int Pbkdf2Iterations  = 9000;
-    static constexpr int TxQueueDepthPerClient = 64;
+    static constexpr int TxQueueDepthPerClient = 96;
     static constexpr int PayloadSlotCount  = TxQueueDepthPerClient + MaxTcpClients;
     static constexpr int MaxRetainedEntries  = 96;
     static constexpr int KeepAliveMultiplierTenths = 15;

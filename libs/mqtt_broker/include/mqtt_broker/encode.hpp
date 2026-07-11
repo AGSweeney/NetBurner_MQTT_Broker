@@ -20,10 +20,11 @@
 namespace mqtt_broker {
 
 // Returns total on-wire size for a QoS 0 PUBLISH (fixed header through payload).
+// protocol_level 4 (MQTT 3.1.1) omits the property section entirely.
 size_t estimate_publish_qos0_size(const char *topic, size_t payload_len, bool retain);
 size_t estimate_publish_size(const char *topic, size_t payload_len, bool retain, uint8_t qos);
 size_t estimate_publish_size(const char *topic, size_t payload_len, bool retain, uint8_t qos,
-                             size_t props_len, bool has_expiry);
+                             size_t props_len, bool has_expiry, uint8_t protocol_level = 5);
 
 // Re-serializes the forwardable PUBLISH properties (payload format indicator, content
 // type, response topic, correlation data, user properties) into wire form. Message
@@ -31,33 +32,44 @@ size_t estimate_publish_size(const char *topic, size_t payload_len, bool retain,
 size_t serialize_forward_properties(const PropertyPool &pool, PropertyHandle h, uint8_t *out,
                                     size_t cap, uint32_t *expiry_interval);
 
-// MQTT-5.0 §3.2 — CONNACK with broker capability properties from ConnackCaps.
+// CONNACK. Level 5 carries broker capability properties from ConnackCaps
+// (MQTT-5.0 §3.2); level 4 is the 2-byte MQTT 3.1.1 form with the ReasonCode
+// mapped to the closest 3.1.1 return code (§3.2.2.3 of MQTT-3.1.1).
 size_t encode_connack(uint8_t *out, size_t cap, ReasonCode reason, bool session_present,
-                      const char *assigned_client_id, uint16_t server_keep_alive = 0);
-// MQTT-5.0 §3.14 — DISCONNECT with reason code only (no properties).
+                      const char *assigned_client_id, uint16_t server_keep_alive = 0,
+                      uint8_t protocol_level = 5);
+// MQTT-5.0 §3.14 — DISCONNECT with reason code only (no properties). MQTT 3.1.1
+// has no server-to-client DISCONNECT; callers must skip it for level 4.
 size_t encode_disconnect(uint8_t *out, size_t cap, ReasonCode reason);
 // MQTT-5.0 §3.12.2 — PINGRESP (zero remaining length).
 size_t encode_pingresp(uint8_t *out, size_t cap);
-// MQTT-5.0 §3.9 — SUBACK reason list (one byte per subscription).
+// SUBACK reason/return-code list (one byte per subscription). Level 4 omits the
+// property length byte and maps error reasons to 0x80.
 size_t encode_suback(uint8_t *out, size_t cap, uint16_t packet_id, const ReasonCode *rcs,
-                     size_t rc_count);
-// MQTT-5.0 §3.11 — UNSUBACK reason list.
+                     size_t rc_count, uint8_t protocol_level = 5);
+// UNSUBACK. Level 4 is packet id only (MQTT-3.1.1 §3.11); level 5 appends reasons.
 size_t encode_unsuback(uint8_t *out, size_t cap, uint16_t packet_id, const ReasonCode *rcs,
-                       size_t rc_count);
+                       size_t rc_count, uint8_t protocol_level = 5);
 // QoS 0 PUBLISH; encoded_offset selects a slice for incremental TX drain.
 size_t encode_publish_qos0(uint8_t *out, size_t cap, const char *topic, bool retain,
                            MessagePool *pool, MessageHandle msg, size_t payload_len,
                            size_t encoded_offset);
 // QoS 0–2 PUBLISH. Payload is streamed from pool; header assembled on stack.
+// Level 4 omits the property section (and message expiry) from the wire format.
 size_t encode_publish(uint8_t *out, size_t cap, const char *topic, bool retain, uint8_t qos,
                     uint16_t packet_id, bool dup, MessagePool *pool, MessageHandle msg,
                     size_t payload_len, size_t encoded_offset, bool has_expiry = false,
-                    uint32_t expiry_remaining = 0);
-// MQTT-5.0 §3.6.4 — QoS 1/2 acknowledgement packets (reason + zero property length).
-size_t encode_puback(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason);
-size_t encode_pubrec(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason);
-size_t encode_pubrel(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason);
-size_t encode_pubcomp(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason);
+                    uint32_t expiry_remaining = 0, uint8_t protocol_level = 5);
+// QoS 1/2 acknowledgement packets. Level 5 appends reason + zero property length
+// (MQTT-5.0 §3.6.4); level 4 is packet id only.
+size_t encode_puback(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                     uint8_t protocol_level = 5);
+size_t encode_pubrec(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                     uint8_t protocol_level = 5);
+size_t encode_pubrel(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                     uint8_t protocol_level = 5);
+size_t encode_pubcomp(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                      uint8_t protocol_level = 5);
 
 }  // namespace mqtt_broker
 

@@ -51,17 +51,22 @@ TopicHandle TopicInternPool::intern(const char *topic)
     }
 
     size_t len = std::strlen(topic);
-    if (len == 0 || bytes_used_ + len + 1 > blob_cap_) {
+    if (len == 0) {
         return NULL_TOPIC;
     }
 
-    // Dedup: same bytes already in the blob — reuse slot and bump ref_count.
+    // Dedup before capacity check — existing topics must remain internable even
+    // when the blob arena is full of retired (released) strings.
     for (size_t i = 0; i < entry_cap_; ++i) {
         if (entries_[i].in_use && entries_[i].length == len &&
             std::memcmp(blob_ + entries_[i].offset, topic, len) == 0) {
             entries_[i].ref_count++;
             return {static_cast<uint16_t>(i), entries_[i].generation};
         }
+    }
+
+    if (bytes_used_ + len + 1 > blob_cap_) {
+        return NULL_TOPIC;
     }
 
     // New topic: claim a free slot and append to the blob (NUL-terminated).
@@ -111,6 +116,22 @@ void TopicInternPool::release(TopicHandle h)
     if (e.generation == 0) {
         e.generation = 1;
     }
+
+    // Compact the blob so bytes_used_ only counts live strings. Without this the
+    // arena leaks len+1 bytes per intern/release cycle and permanently exhausts
+    // after ~2k messages, silently killing route_publish (observed on target).
+    const size_t hole_start = e.offset;
+    const size_t hole_len = static_cast<size_t>(e.length) + 1;
+    const size_t tail = bytes_used_ - (hole_start + hole_len);
+    if (tail > 0) {
+        std::memmove(blob_ + hole_start, blob_ + hole_start + hole_len, tail);
+    }
+    for (size_t i = 0; i < entry_cap_; ++i) {
+        if (entries_[i].in_use && entries_[i].offset > hole_start) {
+            entries_[i].offset = static_cast<uint16_t>(entries_[i].offset - hole_len);
+        }
+    }
+    bytes_used_ -= hole_len;
 }
 
 uint16_t TopicInternPool::ref_count(TopicHandle h) const

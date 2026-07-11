@@ -40,7 +40,8 @@ PacketParser::PacketParser(const ParserLimits &limits, MessagePool *msg_pool,
       property_section_len_(0),
       property_section_consumed_(0),
       property_len_known_(false),
-      active_payload_(NULL_MESSAGE)
+      active_payload_(NULL_MESSAGE),
+      protocol_level_(5)
 {
     if (limits_.control_buffer_bytes > sizeof(control_buf_)) {
         limits_.control_buffer_bytes = sizeof(control_buf_);
@@ -110,7 +111,9 @@ static bool parse_connect_variable_header(const uint8_t *buf, size_t len, Parsed
     pkt->keep_alive = read_u16_be(buf + 2 + plen + 2);
     pkt->clean_start = (pkt->connect_flags & 0x02u) != 0;
     (void)max_topic;
-    return std::strcmp(pkt->protocol_name, "MQTT") == 0 && pkt->protocol_level == 5;
+    // Level 4 = MQTT 3.1.1, level 5 = MQTT 5. Both use protocol name "MQTT".
+    return std::strcmp(pkt->protocol_name, "MQTT") == 0 &&
+           (pkt->protocol_level == 4 || pkt->protocol_level == 5);
 }
 
 static bool parse_connect_will_section(const uint8_t *buf, size_t len, size_t *off,
@@ -131,25 +134,28 @@ static bool parse_connect_will_section(const uint8_t *buf, size_t len, size_t *o
     pkt->will_qos = static_cast<uint8_t>((pkt->connect_flags >> 3) & 0x03u);
     pkt->will_retain = (pkt->connect_flags & 0x20u) != 0;
 
-    VarintDecode prop_len = varint_decode(buf + *off, len - *off);
-    if (prop_len.result != VarintResult::Ok) {
-        return false;
-    }
-    size_t will_props_end = *off + prop_len.bytes_consumed + prop_len.value;
-    if (will_props_end > len) {
-        return false;
-    }
-    if (props != nullptr && prop_len.value > 0) {
-        // Will properties reuse the CONNECT allow-list (payload format, expiry,
-        // content type, response topic, correlation data, will delay, user props).
-        PropertyValidationResult vr = parse_and_validate_properties(
-            PacketType::Connect, buf + *off, prop_len.bytes_consumed + prop_len.value, props,
-            &pkt->will_properties);
-        if (!vr.ok) {
+    // MQTT 3.1.1 has no will-properties section; the will topic follows directly.
+    if (pkt->protocol_level >= 5) {
+        VarintDecode prop_len = varint_decode(buf + *off, len - *off);
+        if (prop_len.result != VarintResult::Ok) {
             return false;
         }
+        size_t will_props_end = *off + prop_len.bytes_consumed + prop_len.value;
+        if (will_props_end > len) {
+            return false;
+        }
+        if (props != nullptr && prop_len.value > 0) {
+            // Will properties reuse the CONNECT allow-list (payload format, expiry,
+            // content type, response topic, correlation data, will delay, user props).
+            PropertyValidationResult vr = parse_and_validate_properties(
+                PacketType::Connect, buf + *off, prop_len.bytes_consumed + prop_len.value, props,
+                &pkt->will_properties);
+            if (!vr.ok) {
+                return false;
+            }
+        }
+        *off = will_props_end;
     }
-    *off = will_props_end;
 
     if (*off + 2 > len) {
         return false;
@@ -530,17 +536,30 @@ size_t PacketParser::consume_byte(uint8_t b)
                     packet_.packet_id = 0;
                 }
                 control_len_ = 0;
-                phase_ = ParsePhase::Properties;
-                property_len_known_ = false;
-                property_section_len_ = 0;
+                if (protocol_level_ == 4) {
+                    // MQTT 3.1.1: no properties; payload (possibly empty) follows.
+                    if (remaining_consumed_ >= remaining_total_) {
+                        finish_packet();
+                        return 1;
+                    }
+                    phase_ = ParsePhase::Payload;
+                } else {
+                    phase_ = ParsePhase::Properties;
+                    property_len_known_ = false;
+                    property_section_len_ = 0;
+                }
             }
         } else if (packet_.type == PacketType::Subscribe) {
             if (control_len_ >= 2) {
                 packet_.packet_id = read_u16_be(control_buf_);
                 control_len_ = 0;
-                phase_ = ParsePhase::Properties;
-                property_len_known_ = false;
-                property_section_len_ = 0;
+                if (protocol_level_ == 4) {
+                    phase_ = ParsePhase::Payload;
+                } else {
+                    phase_ = ParsePhase::Properties;
+                    property_len_known_ = false;
+                    property_section_len_ = 0;
+                }
             }
         } else if (packet_.type == PacketType::Connect) {
             if (control_len_ == 2) {
@@ -557,18 +576,29 @@ size_t PacketParser::consume_byte(uint8_t b)
                     enter_error(ReasonCode::ProtocolError);
                     return 1;
                 }
+                // Latch the connection's protocol level for all later packets.
+                protocol_level_ = packet_.protocol_level;
                 control_len_ = 0;
-                phase_ = ParsePhase::Properties;
-                property_len_known_ = false;
-                property_section_len_ = 0;
+                if (protocol_level_ == 4) {
+                    // MQTT 3.1.1 CONNECT: client id payload follows the VH directly.
+                    phase_ = ParsePhase::Payload;
+                } else {
+                    phase_ = ParsePhase::Properties;
+                    property_len_known_ = false;
+                    property_section_len_ = 0;
+                }
             }
         } else if (packet_.type == PacketType::Unsubscribe) {
             if (control_len_ >= 2) {
                 packet_.packet_id = read_u16_be(control_buf_);
                 control_len_ = 0;
-                phase_ = ParsePhase::Properties;
-                property_len_known_ = false;
-                property_section_len_ = 0;
+                if (protocol_level_ == 4) {
+                    phase_ = ParsePhase::Payload;
+                } else {
+                    phase_ = ParsePhase::Properties;
+                    property_len_known_ = false;
+                    property_section_len_ = 0;
+                }
             }
         } else if (packet_.type == PacketType::Puback || packet_.type == PacketType::Pubrec ||
                    packet_.type == PacketType::Pubrel || packet_.type == PacketType::Pubcomp) {

@@ -15,16 +15,20 @@
 namespace mqtt_broker {
 
 size_t estimate_publish_size(const char *topic, size_t payload_len, bool retain, uint8_t qos,
-                             size_t props_len, bool has_expiry)
+                             size_t props_len, bool has_expiry, uint8_t protocol_level)
 {
     if (topic == nullptr || qos > 2) {
         return 0;
     }
     size_t tlen = std::strlen(topic);
     size_t vh = 2 + tlen + ((qos > 0) ? 2u : 0u);  // topic len + name [+ packet id]
-    size_t prop_total = props_len + (has_expiry ? 5u : 0u);  // 0x02 + 4-byte interval
-    uint8_t pl_buf[4];
-    size_t pl_size = varint_encode(static_cast<uint32_t>(prop_total), pl_buf, sizeof(pl_buf));
+    size_t prop_total = 0;
+    size_t pl_size = 0;
+    if (protocol_level >= 5) {
+        prop_total = props_len + (has_expiry ? 5u : 0u);  // 0x02 + 4-byte interval
+        uint8_t pl_buf[4];
+        pl_size = varint_encode(static_cast<uint32_t>(prop_total), pl_buf, sizeof(pl_buf));
+    }
     size_t body = vh + pl_size + prop_total + payload_len;
     uint8_t rl_buf[4];
     size_t rl_size = varint_encode(static_cast<uint32_t>(body), rl_buf, sizeof(rl_buf));
@@ -105,14 +109,16 @@ size_t serialize_forward_properties(const PropertyPool &pool, PropertyHandle h, 
     return off;
 }
 
-// Shared encoder for PUBACK/PUBREC/PUBREL/PUBCOMP — MQTT-5.0 §3.6.4.
+// Shared encoder for PUBACK/PUBREC/PUBREL/PUBCOMP. MQTT 5 appends reason + zero
+// property length (§3.6.4); MQTT 3.1.1 is packet id only.
 static size_t encode_ack_packet(uint8_t *out, size_t cap, PacketType type, uint16_t packet_id,
-                                ReasonCode reason, uint8_t fixed_qos_bits)
+                                ReasonCode reason, uint8_t fixed_qos_bits,
+                                uint8_t protocol_level)
 {
     if (out == nullptr || cap < 6 || packet_id == 0) {
         return 0;
     }
-    size_t remaining = 2 + 1 + 1;  // packet id + reason + property length (0)
+    size_t remaining = (protocol_level >= 5) ? (2 + 1 + 1) : 2;
     uint8_t rl[4];
     size_t rl_size = varint_encode(static_cast<uint32_t>(remaining), rl, sizeof(rl));
     if (cap < 1 + rl_size + remaining) {
@@ -124,38 +130,80 @@ static size_t encode_ack_packet(uint8_t *out, size_t cap, PacketType type, uint1
     off += rl_size;
     write_u16_be(out + off, packet_id);
     off += 2;
-    out[off++] = static_cast<uint8_t>(reason);
-    out[off++] = 0x00;  // zero property length
+    if (protocol_level >= 5) {
+        out[off++] = static_cast<uint8_t>(reason);
+        out[off++] = 0x00;  // zero property length
+    }
     return off;
 }
 
-size_t encode_puback(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason)
+size_t encode_puback(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                     uint8_t protocol_level)
 {
-    return encode_ack_packet(out, cap, PacketType::Puback, packet_id, reason, 0x00u);
+    return encode_ack_packet(out, cap, PacketType::Puback, packet_id, reason, 0x00u,
+                             protocol_level);
 }
 
-size_t encode_pubrec(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason)
+size_t encode_pubrec(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                     uint8_t protocol_level)
 {
-    return encode_ack_packet(out, cap, PacketType::Pubrec, packet_id, reason, 0x00u);
+    return encode_ack_packet(out, cap, PacketType::Pubrec, packet_id, reason, 0x00u,
+                             protocol_level);
 }
 
-size_t encode_pubrel(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason)
+size_t encode_pubrel(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                     uint8_t protocol_level)
 {
-    return encode_ack_packet(out, cap, PacketType::Pubrel, packet_id, reason, 0x02u);  // QoS 1
+    return encode_ack_packet(out, cap, PacketType::Pubrel, packet_id, reason, 0x02u,
+                             protocol_level);  // fixed header flags 0b0010
 }
 
-size_t encode_pubcomp(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason)
+size_t encode_pubcomp(uint8_t *out, size_t cap, uint16_t packet_id, ReasonCode reason,
+                      uint8_t protocol_level)
 {
-    return encode_ack_packet(out, cap, PacketType::Pubcomp, packet_id, reason, 0x00u);
+    return encode_ack_packet(out, cap, PacketType::Pubcomp, packet_id, reason, 0x00u,
+                             protocol_level);
+}
+
+// MQTT-3.1.1 §3.2.2.3 CONNACK return codes.
+static uint8_t reason_to_v4_connack_code(ReasonCode reason)
+{
+    switch (reason) {
+    case ReasonCode::Success:
+        return 0x00;
+    case ReasonCode::UnsupportedProtocolVersion:
+        return 0x01;  // unacceptable protocol version
+    case ReasonCode::ClientIdentifierNotValid:
+    case ReasonCode::ProtocolError:
+        return 0x02;  // identifier rejected
+    case ReasonCode::BadUserNameOrPassword:
+        return 0x04;
+    case ReasonCode::NotAuthorized:
+        return 0x05;
+    default:
+        return 0x03;  // server unavailable (quota, capacity, internal errors)
+    }
 }
 
 size_t encode_connack(uint8_t *out, size_t cap, ReasonCode reason, bool session_present,
-                      const char *assigned_client_id, uint16_t server_keep_alive)
+                      const char *assigned_client_id, uint16_t server_keep_alive,
+                      uint8_t protocol_level)
 {
     if (out == nullptr || cap < 5) {
         return 0;
     }
     uint8_t flags = session_present ? 0x01u : 0x00u;
+
+    if (protocol_level == 4) {
+        // MQTT 3.1.1: fixed 2-byte variable header, no properties. A failed
+        // CONNACK must report session present 0 (MQTT-3.1.1 §3.2.2.1).
+        out[0] = packet_type_to_byte(PacketType::Connack);
+        out[1] = 0x02;
+        out[2] = (reason == ReasonCode::Success) ? flags : 0x00u;
+        out[3] = reason_to_v4_connack_code(reason);
+        return 4;
+    }
+
     uint8_t prop_body[160];
     size_t prop_off = 0;
     auto append_byte = [&](uint8_t b) {
@@ -247,12 +295,13 @@ size_t encode_pingresp(uint8_t *out, size_t cap)
 }
 
 size_t encode_suback(uint8_t *out, size_t cap, uint16_t packet_id, const ReasonCode *rcs,
-                     size_t rc_count)
+                     size_t rc_count, uint8_t protocol_level)
 {
     if (out == nullptr || rcs == nullptr || rc_count == 0) {
         return 0;
     }
-    size_t remaining = 2 + 1 + rc_count;  // packet id + property length (0) + reason list
+    const bool v5 = protocol_level >= 5;
+    size_t remaining = 2 + (v5 ? 1u : 0u) + rc_count;  // id [+ prop len] + code list
     uint8_t rl[4];
     size_t rl_size = varint_encode(static_cast<uint32_t>(remaining), rl, sizeof(rl));
     if (cap < 1 + rl_size + remaining) {
@@ -264,20 +313,27 @@ size_t encode_suback(uint8_t *out, size_t cap, uint16_t packet_id, const ReasonC
     off += rl_size;
     write_u16_be(out + off, packet_id);
     off += 2;
-    out[off++] = 0x00;
+    if (v5) {
+        out[off++] = 0x00;
+    }
     for (size_t i = 0; i < rc_count; ++i) {
-        out[off++] = static_cast<uint8_t>(rcs[i]);
+        uint8_t code = static_cast<uint8_t>(rcs[i]);
+        if (!v5 && code > 2) {
+            code = 0x80;  // MQTT 3.1.1 SUBACK: granted QoS 0-2 or 0x80 failure
+        }
+        out[off++] = code;
     }
     return off;
 }
 
 size_t encode_unsuback(uint8_t *out, size_t cap, uint16_t packet_id, const ReasonCode *rcs,
-                       size_t rc_count)
+                       size_t rc_count, uint8_t protocol_level)
 {
     if (out == nullptr || rcs == nullptr || rc_count == 0) {
         return 0;
     }
-    size_t remaining = 2 + 1 + rc_count;
+    const bool v5 = protocol_level >= 5;
+    size_t remaining = v5 ? (2 + 1 + rc_count) : 2;  // 3.1.1 UNSUBACK is id only
     uint8_t rl[4];
     size_t rl_size = varint_encode(static_cast<uint32_t>(remaining), rl, sizeof(rl));
     if (cap < 1 + rl_size + remaining) {
@@ -289,9 +345,11 @@ size_t encode_unsuback(uint8_t *out, size_t cap, uint16_t packet_id, const Reaso
     off += rl_size;
     write_u16_be(out + off, packet_id);
     off += 2;
-    out[off++] = 0x00;
-    for (size_t i = 0; i < rc_count; ++i) {
-        out[off++] = static_cast<uint8_t>(rcs[i]);
+    if (v5) {
+        out[off++] = 0x00;
+        for (size_t i = 0; i < rc_count; ++i) {
+            out[off++] = static_cast<uint8_t>(rcs[i]);
+        }
     }
     return off;
 }
@@ -307,7 +365,7 @@ size_t encode_publish_qos0(uint8_t *out, size_t cap, const char *topic, bool ret
 size_t encode_publish(uint8_t *out, size_t cap, const char *topic, bool retain, uint8_t qos,
                       uint16_t packet_id, bool dup, MessagePool *pool, MessageHandle msg,
                       size_t payload_len, size_t encoded_offset, bool has_expiry,
-                      uint32_t expiry_remaining)
+                      uint32_t expiry_remaining, uint8_t protocol_level)
 {
     if (out == nullptr || topic == nullptr || pool == nullptr || qos > 2) {
         return 0;
@@ -318,9 +376,14 @@ size_t encode_publish(uint8_t *out, size_t cap, const char *topic, bool retain, 
     if (out == nullptr || cap == 0) {
         return 0;
     }
+    const bool v5 = protocol_level >= 5;
+    if (!v5) {
+        has_expiry = false;  // MQTT 3.1.1 has no properties on the wire
+    }
     size_t props_len = 0;
-    const uint8_t *props = pool->props(msg, &props_len);
-    size_t total = estimate_publish_size(topic, payload_len, retain, qos, props_len, has_expiry);
+    const uint8_t *props = v5 ? pool->props(msg, &props_len) : nullptr;
+    size_t total = estimate_publish_size(topic, payload_len, retain, qos, props_len, has_expiry,
+                                         protocol_level);
     if (encoded_offset >= total) {
         return 0;
     }
@@ -331,9 +394,13 @@ size_t encode_publish(uint8_t *out, size_t cap, const char *topic, bool retain, 
     // packet-size ceiling up to the configured MaxPacketBytes.
     size_t tlen = std::strlen(topic);
     size_t vh = 2 + tlen + ((qos > 0) ? 2u : 0u);
-    size_t prop_total = props_len + (has_expiry ? 5u : 0u);
+    size_t prop_total = 0;
     uint8_t pl[4];
-    size_t pl_size = varint_encode(static_cast<uint32_t>(prop_total), pl, sizeof(pl));
+    size_t pl_size = 0;
+    if (v5) {
+        prop_total = props_len + (has_expiry ? 5u : 0u);
+        pl_size = varint_encode(static_cast<uint32_t>(prop_total), pl, sizeof(pl));
+    }
     size_t body = vh + pl_size + prop_total + payload_len;
     uint8_t rl[4];
     size_t rl_size = varint_encode(static_cast<uint32_t>(body), rl, sizeof(rl));
@@ -361,16 +428,18 @@ size_t encode_publish(uint8_t *out, size_t cap, const char *topic, bool retain, 
         write_u16_be(header + hlen, packet_id);
         hlen += 2;
     }
-    std::memcpy(header + hlen, pl, pl_size);
-    hlen += pl_size;
-    if (has_expiry) {
-        header[hlen++] = MessageExpiryInterval;
-        write_u32_be(header + hlen, expiry_remaining);
-        hlen += 4;
-    }
-    if (props_len > 0 && props != nullptr) {
-        std::memcpy(header + hlen, props, props_len);
-        hlen += props_len;
+    if (v5) {
+        std::memcpy(header + hlen, pl, pl_size);
+        hlen += pl_size;
+        if (has_expiry) {
+            header[hlen++] = MessageExpiryInterval;
+            write_u32_be(header + hlen, expiry_remaining);
+            hlen += 4;
+        }
+        if (props_len > 0 && props != nullptr) {
+            std::memcpy(header + hlen, props, props_len);
+            hlen += props_len;
+        }
     }
 
     // Emit the window [encoded_offset, encoded_offset + cap) intersected with the

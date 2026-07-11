@@ -95,6 +95,12 @@ public:
     bool packet_ready() const { return phase_ == ParsePhase::Complete; }
     ReasonCode error_reason() const { return error_reason_; }
     const ParsedPacket &packet() const { return packet_; }
+    // Connection protocol level (4 = MQTT 3.1.1, 5 = MQTT 5). Latched from the
+    // CONNECT packet and persists across reset() so later packets on the same
+    // connection are parsed with the right wire format.
+    uint8_t protocol_level() const { return protocol_level_; }
+    // Call when the parser is reused for a new connection (before any CONNECT).
+    void reset_protocol_level() { protocol_level_ = 5; }
 
 private:
     size_t consume_byte(uint8_t b);
@@ -127,6 +133,7 @@ private:
 
     ParsedPacket packet_;
     MessageHandle active_payload_;
+    uint8_t protocol_level_;  // Survives reset(); see protocol_level()
 };
 
 }  // namespace mqtt_broker

@@ -80,6 +80,7 @@ private:
         SessionHandle session;
         bool in_use;
         uint32_t attached_tick;
+        uint8_t protocol_level;  // 4 = MQTT 3.1.1, 5 = MQTT 5 (set at CONNECT)
     };
 
     bool handle_packet(uint16_t transport_id, const ParsedPacket &pkt);

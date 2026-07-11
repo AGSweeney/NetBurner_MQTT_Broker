@@ -10,6 +10,8 @@
 <meta name="color-scheme" content="light">
 <title>NetBurner MQTT Broker Admin</title>
 <link rel="stylesheet" href="style.css">
+<script src="chart.min.js"></script>
+<script src="charts.js"></script>
 </head>
 <body>
 
@@ -39,9 +41,34 @@
     <p class="nb-eyebrow">Live Dashboard</p>
     <h2>Broker status and compile-time limits.</h2>
     <p>
-      Metrics refresh every two seconds from <span class="nb-mono">GET /api/broker/status</span>.
-      Platform limits are read-only values baked into firmware at build time.
+      Live metrics stream over <span class="nb-mono">WebSocket /ws/stats</span> (Chart.js).
+      Platform limits are read once from <span class="nb-mono">GET /api/broker/status</span>.
     </p>
+
+    <div class="nb-card">
+      <div class="nb-card-header">Live Charts</div>
+      <p style="margin-bottom:14px;">
+        <span class="nb-status nb-status-info" id="wsStatusPill">WebSocket connecting</span>
+      </p>
+      <div class="nb-chart-grid">
+        <div>
+          <h4>MQTT clients</h4>
+          <div class="nb-chart-wrap"><canvas id="chartClients"></canvas></div>
+        </div>
+        <div>
+          <h4>Publish rate (per 2s)</h4>
+          <div class="nb-chart-wrap"><canvas id="chartPublish"></canvas></div>
+        </div>
+        <div>
+          <h4>Interface throughput (RX / TX)</h4>
+          <div class="nb-chart-wrap"><canvas id="chartIfThroughput"></canvas></div>
+        </div>
+        <div>
+          <h4>Connect accept / reject (per 2s)</h4>
+          <div class="nb-chart-wrap"><canvas id="chartConnect"></canvas></div>
+        </div>
+      </div>
+    </div>
 
     <div class="nb-card">
       <div class="nb-card-header">Broker Status</div>
@@ -677,37 +704,39 @@ function listenerSummary(data) {
 }
 
 async function refreshStatus() {
-  var pill = document.getElementById("statusPill");
-  var detail = document.getElementById("statusDetail");
   try {
     var r = await fetch("api/broker/status", { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     var data = await r.json();
-    var m = data.metrics || {};
 
     document.getElementById("headerMeta").textContent =
       data.platform + " · uptime " + data.uptime + "s";
-    document.getElementById("statClients").textContent =
-      m.clients_connected + " connected (peak " + m.clients_connected_peak + ")" +
-      (data.tls_clients_connected ? " · " + data.tls_clients_connected + " TLS" : "");
-    document.getElementById("statPublish").textContent =
-      m.publish_received + " / " + m.publish_sent;
-    document.getElementById("statListener").textContent = listenerSummary(data);
-
-    detail.textContent =
-      "accept " + m.connect_accept + " · reject " + m.connect_reject +
-      " · parser errors " + m.parser_errors +
-      " · slow consumer drops " + m.slow_consumer_disconnects;
 
     if (data.limits) renderLimits(data.limits);
 
-    var anyActive = data.listener_active || data.tls_listener_active;
-    pill.className = "nb-status " + (anyActive ? "nb-status-ok" : "nb-status-warn");
-    pill.textContent = anyActive ? "Running" : "Listeners off";
+    if (!chartClients && data.metrics) {
+      updateStatusTilesFromBroker({
+        clients_connected: data.metrics.clients_connected,
+        tls_clients_connected: data.tls_clients_connected,
+        publish_received: data.metrics.publish_received,
+        publish_sent: data.metrics.publish_sent,
+        connect_accept: data.metrics.connect_accept,
+        connect_reject: data.metrics.connect_reject,
+        parser_errors: data.metrics.parser_errors,
+        slow_consumer_disconnects: data.metrics.slow_consumer_disconnects,
+        plain_tcp_enabled: data.plain_tcp_enabled,
+        plain_tcp_port: data.plain_tcp_port,
+        listener_active: data.listener_active,
+        tls_enabled: data.tls_enabled,
+        tls_port: data.tls_port,
+        tls_listener_active: data.tls_listener_active
+      });
+    }
   } catch (e) {
+    var pill = document.getElementById("statusPill");
     pill.className = "nb-status nb-status-err";
     pill.textContent = "Status unavailable";
-    detail.textContent = String(e);
+    document.getElementById("statusDetail").textContent = String(e);
   }
 }
 
@@ -1085,7 +1114,8 @@ loadNetwork();
 loadSslStatus();
 loadMqttAuth();
 refreshStatus();
-statusTimer = setInterval(refreshStatus, 2000);
+initDashboardCharts();
+statusTimer = setInterval(refreshStatus, 10000);
 </script>
 
 </body>

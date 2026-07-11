@@ -72,6 +72,8 @@ enum ReasonCode : uint8_t {
     MalformedPacket = 0x81,
     ProtocolError = 0x82,
     ImplementationSpecificError = 0x83,
+    UnsupportedProtocolVersion = 0x84,
+    ClientIdentifierNotValid = 0x85,
     BadUserNameOrPassword = 0x86,
     NotAuthorized = 0x87,
     TopicNameInvalid = 0x90,
