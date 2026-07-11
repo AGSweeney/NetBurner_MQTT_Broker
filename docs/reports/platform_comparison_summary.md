@@ -12,9 +12,9 @@
 
 | Platform | Host | CPU | Clock | Conformance | Soak 3.1.1 | Soak MQTT 5 | Latency p50 | Health (soak) | Report |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **SOMRT1061** | `172.16.82.8` | NXP i.MX RT1061 (Arm Cortex-M7) | 528 MHz | **28/28** | 11,084 msg/s | 10,758 msg/s | 0.3 / 0.3 ms | 3.1.1: 0 issues; v5: parser 3, keep-alive 2 | [report](somrt1061_conformance_report.html) |
-| **MODM7AE70** | `172.16.82.52` | Microchip SAM E70 (Arm Cortex-M7) | 300 MHz | **28/28** | 1,244 msg/s | 1,209 msg/s | 0.8 / 0.8 ms | 0 issues | [report](modm7ae70_conformance_report.html) |
-| **NANO54415** | `172.16.82.55` | Freescale ColdFire MCF54415 | 250 MHz | **28/28** | 838 msg/s | 808 msg/s | 1.4 / 1.4 ms | 0 issues | [report](nano54415_conformance_report.html) |
+| **SOMRT1061** | `172.16.82.8` | NXP i.MX RT1061 (Arm Cortex-M7) | 528 MHz | **28/28** | 11,084 msg/s | 10,758 msg/s | 0.3 / 0.3 ms | 3.1.1: 0 issues; v5: parser 3, keep-alive 2 | [report](somrt1061_conformance_report.md) |
+| **MODM7AE70** | `172.16.82.52` | Microchip SAM E70 (Arm Cortex-M7) | 300 MHz | **28/28** | 1,244 msg/s | 1,209 msg/s | 0.8 / 0.8 ms | 0 issues | [report](modm7ae70_conformance_report.md) |
+| **NANO54415** | `172.16.82.55` | Freescale ColdFire MCF54415 | 250 MHz | **28/28** | 838 msg/s | 808 msg/s | 1.4 / 1.4 ms | 0 issues | [report](nano54415_conformance_report.md) |
 
 ## Hardware & broker limits
 
@@ -47,6 +47,6 @@
 
 ## Individual reports
 
-- [SOMRT1061 @ 172.16.82.8](somrt1061_conformance_report.html)
-- [MODM7AE70 @ 172.16.82.52](modm7ae70_conformance_report.html)
-- [NANO54415 @ 172.16.82.55](nano54415_conformance_report.html)
+- [SOMRT1061 @ 172.16.82.8](somrt1061_conformance_report.md)
+- [MODM7AE70 @ 172.16.82.52](modm7ae70_conformance_report.md)
+- [NANO54415 @ 172.16.82.55](nano54415_conformance_report.md)
