@@ -1,10 +1,11 @@
 # NetBurner MQTT Broker
 
-An embedded **MQTT 5.0 broker** for [NetBurner](https://www.netburner.com) modules. The firmware runs on-device with plain TCP and MQTTS listeners, a web admin UI, optional client authentication, and a portable C++ broker core that can be unit-tested on the host.
+An embedded **MQTT broker** (MQTT 3.1.1 and MQTT 5.0) for [NetBurner](https://www.netburner.com) modules. The firmware runs on-device with plain TCP and MQTTS listeners, a web admin UI, optional client authentication, and a portable C++ broker core that can be unit-tested on the host.
 
 ## Features
 
-- **MQTT 5.0** — CONNECT/CONNACK properties, session expiry, will messages (including DISCONNECT with Will Message), QoS 0/1/2 with full handshake, retained messages, wildcard subscriptions
+- **MQTT 3.1.1 and MQTT 5.0** — Dual-protocol broker on the same TCP listener; clients negotiate version at CONNECT. MQTT 5 adds CONNECT/CONNACK properties, session expiry, will messages (including DISCONNECT with Will Message), and reason codes. Both versions support QoS 0/1/2 with full handshake, retained messages, and wildcard subscriptions
+- **Cross-version routing** — MQTT 5 publishers can deliver to MQTT 3.1.1 subscribers (properties stripped); retained and QoS 1 work across protocol versions
 - **Dual listeners** — Plain TCP (default port 1883) and MQTTS (default port 8883, uses the device TLS certificate)
 - **Sparkplug B ready** — Payload-agnostic routing; host tests and live scripts exercise Sparkplug topic shapes and binary payloads
 - **Web admin UI** — Dashboard, broker settings, security (MQTT users), and network configuration at `http://<device-ip>/`
@@ -18,7 +19,7 @@ The repository splits a portable broker library from the NetBurner integration l
 
 ```
 NetBurner_MQTT_Broker/
-├── libs/mqtt_broker/              # Portable MQTT 5 broker (C++17)
+├── libs/mqtt_broker/              # Portable MQTT broker (C++17; 3.1.1 + 5.0)
 │   ├── include/mqtt_broker/       # Public headers (Broker, parser, session, limits, …)
 │   ├── src/                       # Broker implementation
 │   ├── tests/                     # Host unit & acceptance tests (CMake/CTest)
@@ -122,44 +123,40 @@ On Windows, the helper script runs the same suite with assert-dialog suppression
 
 ## Device Verification
 
-### Live device conformance EXE (no Python/Node)
+### mqtt_device_suite
 
-Build a standalone Windows executable that runs the full dual-version conformance suite, benchmarks, and optional soak against a flashed module:
+From `libs/mqtt_broker`:
 
 ```powershell
-cd libs\mqtt_broker
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target mqtt_device_suite
-```
-
-Run (defaults to `172.16.82.8:1883`):
-
-```powershell
 .\build\tools\device_suite\Release\mqtt_device_suite.exe --host 172.16.82.8 --soak-seconds 3600
 ```
 
-Writes `mqtt_conformance_results.json` (same schema as the Python suite) for report generation. Use `--help` for all options.
+Conformance (3.1.1 + 5), benchmarks, optional soak. Default host `172.16.82.8:1883`. JSON output via `--out`. See `--help`.
 
-After flashing and connecting the module to your network, run scripts from `platforms/netburner/scripts/`. Pass the device IP as the first argument (scripts default to `172.16.82.8`).
+### Node scripts
+
+From `platforms/netburner/scripts/` (`npm install` first). Device IP is the first argument; default `172.16.82.8`.
 
 ```bash
-cd platforms/netburner/scripts
-npm install
-
-# MQTT 5 conformance (plain TCP :1883)
-node mqtt5_verify.js <device-ip>
-
-# MQTTS on :8883 (enable TLS in admin UI first)
-node mqtt5_tls_verify.js <device-ip>
-
-# Sparkplug B lifecycle over MQTT 5
+node mqtt5_verify.js <device-ip>          # plain TCP :1883
+node mqtt5_tls_verify.js <device-ip>      # MQTTS :8883
 node sparkplug_live_verify.js <device-ip>
-
-# Authentication (configure users in admin UI first)
-node mqtt5_auth_verify.js <device-ip>
+node mqtt5_auth_verify.js <device-ip>     # set up users in admin UI first
 ```
 
-Additional PowerShell and Python utilities (`mqtt-smoke.ps1`, `mqtt-bench.py`, etc.) are available for load and qualification testing.
+Other scripts in that directory: `mqtt-smoke.ps1`, `mqtt-bench.py`, etc.
+
+### Reports
+
+[docs/reports/platform_comparison_summary.md](docs/reports/platform_comparison_summary.md) — SOMRT1061, MODM7AE70, NANO54415. Per-platform reports in the same folder.
+
+```powershell
+cd platforms/netburner/scripts
+python generate_conformance_report.py --results ../../../libs/mqtt_broker/somrt1061_soak_results.json --out-dir ../../../docs/reports --name somrt1061_conformance_report --platform SOMRT1061
+python generate_platform_summary.py --results-dir ../../../libs/mqtt_broker --out-dir ../../../docs/reports
+```
 
 ## Configuration
 
@@ -190,7 +187,9 @@ GET /api/broker/status
 
 The dashboard polls this endpoint every two seconds.
 
-## Broker Capabilities (CONNACK)
+## Broker Capabilities
+
+### MQTT 5 (CONNACK)
 
 Advertised to connecting MQTT 5 clients:
 
@@ -201,6 +200,10 @@ Advertised to connecting MQTT 5 clients:
 - **Topic aliases:** not supported
 - **Receive Maximum:** 8 (matches per-client QoS 2 inflight limit)
 - **Maximum Packet Size:** 16,384 bytes
+
+### MQTT 3.1.1
+
+Same TCP/MQTTS ports as MQTT 5. Protocol level 4 (`MQIsdp` / `MQTT`). QoS 0–2, wills, retained, wildcards. No MQTT 5 properties or reason codes.
 
 ## Platform Limits (NANO54415 / SOMRT1061 reference)
 
