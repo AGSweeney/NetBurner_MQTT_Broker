@@ -875,13 +875,14 @@ bool Broker::enqueue_delivery(uint16_t transport_id, SessionHandle session, cons
     };
 
     if (tx_over_budget()) {
-        // Burst absorption: the queue may be full only because the event loop
-        // hasn't drained this connection yet this pass. Flush to the socket
-        // before declaring the consumer slow — only a consumer whose TCP send
-        // buffer is also full is genuinely stuck.
-        drain_tx(transport_id);
-        if (!connections_[transport_id].in_use) {
-            return false;  // drain hit a write error and disconnected
+        // Burst absorption: drain repeatedly before declaring slow consumer.
+        // One pass is not enough when writeavail() returns 0 between chunks.
+        static const int kDrainAttempts = 8;
+        for (int attempt = 0; attempt < kDrainAttempts && tx_over_budget(); ++attempt) {
+            drain_tx(transport_id);
+            if (!connections_[transport_id].in_use) {
+                return false;  // drain hit a write error and disconnected
+            }
         }
         if (tx_over_budget()) {
             disconnect_transport(transport_id, true);

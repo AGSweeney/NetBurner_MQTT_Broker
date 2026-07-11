@@ -72,6 +72,11 @@ if(MSVC)
     target_link_options(fuzz_parser PRIVATE "/WHOLEARCHIVE:$<TARGET_FILE:mqtt_test_support>")
 endif()
 
+option(MQTT_BUILD_DEVICE_SUITE "Build live device conformance EXE (mqtt_device_suite)" ON)
+if(MQTT_BUILD_DEVICE_SUITE)
+    add_subdirectory(tools/device_suite)
+endif()
+
 enable_testing()
 add_test(NAME test_wire COMMAND test_wire)
 add_test(NAME test_varint COMMAND test_varint)

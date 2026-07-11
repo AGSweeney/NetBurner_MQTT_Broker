@@ -457,9 +457,14 @@ void BrokerServerTask(void *pd)
             }
 
             uint16_t tid = gFds[i].transport_id;
-            // Drain all readable data before disconnect checks — partial packets must finish parsing.
-            while (dataavail(fd) && gBroker.transport_attached(tid)) {
+            // Cap reads per fd so a flood publisher cannot starve other clients'
+            // on_readable() — unread PINGREQs were tripping keep-alive (~180s).
+            static const int kMaxReadablePassesPerFd = 64;
+            int read_passes = 0;
+            while (dataavail(fd) && gBroker.transport_attached(tid) &&
+                   read_passes < kMaxReadablePassesPerFd) {
                 gBroker.on_readable(tid);
+                read_passes++;
             }
 
             // NetBurner select() does not flag closed sockets readable, so poll

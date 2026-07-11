@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MQTT Conformance Report — 172.16.82.8</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --surface: #fff; --text: #1a1d21; --muted: #5c6570;
+    --border: #d8dee4; --pass: #137333; --fail: #a40e26; --accent: #0550ae;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.25rem 3rem; font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55; max-width: 920px; margin-inline: auto;
+  }
+  h1 { font-size: 1.65rem; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
+  .meta { color: var(--muted); margin-bottom: 1rem; }
+  .meta strong { color: var(--text); }
+  .specs { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; }
+  .specs-title { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; margin-bottom: 0.55rem; }
+  .specs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.55rem 1rem; }
+  .spec-item { font-size: 0.88rem; }
+  .spec-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .spec-value { margin-top: 0.1rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 0.65rem; margin-bottom: 1.75rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.9rem 1rem; }
+  .card .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+  .card .value { font-size: 1.2rem; font-weight: 700; margin-top: 0.2rem; color: var(--accent); }
+  .card .sub { font-size: 0.82rem; color: var(--muted); margin-top: 0.15rem; }
+  section { margin-bottom: 2rem; }
+  h2 { font-size: 1.15rem; margin: 0 0 0.65rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--border); }
+  .note { font-size: 0.88rem; color: var(--muted); font-style: italic; margin-bottom: 0.65rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 0.9rem; }
+  th, td { padding: 0.5rem 0.7rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #eef1f4; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.pass { color: var(--pass); font-weight: 600; }
+  td.fail { color: var(--fail); font-weight: 600; }
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.65rem; }
+  figure img { width: 100%; max-width: 100%; height: auto; display: block; border-radius: 4px; }
+  figcaption { font-size: 0.82rem; color: var(--muted); margin-top: 0.45rem; text-align: center; }
+  .charts { display: grid; gap: 1rem; }
+  @media print {
+    body { background: #fff; padding: 0.4in; max-width: none; }
+    .card, table, figure { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <h1>MQTT Broker Conformance Report</h1>
+  <p class="meta">NetBurner SOMRT1061 at <strong>172.16.82.8</strong> · TCP 1883 · 2026-07-11 16:48:54</p>
+  <div class="specs"><div class="specs-title">Hardware</div><div class="specs-grid"><div class="spec-item"><div class="spec-label">CPU</div><div class="spec-value">NXP i.MX RT1061 (Arm Cortex-M7)</div></div><div class="spec-item"><div class="spec-label">Clock</div><div class="spec-value">528 MHz</div></div><div class="spec-item"><div class="spec-label">RAM</div><div class="spec-value">32 MB SDRAM + 1 MB on-chip SRAM</div></div><div class="spec-item"><div class="spec-label">Flash</div><div class="spec-value">8 MB SPI NOR</div></div><div class="spec-item"><div class="spec-label">Network</div><div class="spec-value">Dual 10/100 Ethernet</div></div><div class="spec-item"><div class="spec-label">Broker limits</div><div class="spec-value">32 TCP clients · 192 KB payload pool · 64 KB retained</div></div></div></div>
+  <div class="cards">
+    <div class="card"><div class="label">Conformance</div><div class="value">28/28 PASS</div></div>
+    <div class="card"><div class="label">MQTT 3.1.1 sustained</div><div class="value">11,084 msg/s</div><div class="sub">665,088 msgs · 100.0% delivered · 60 s soak</div></div><div class="card"><div class="label">MQTT 5 sustained</div><div class="value">10,758 msg/s</div><div class="sub">645,505 msgs · 100.0% delivered · 60 s soak</div></div>
+    
+  </div>
+  <section><h2>Sustained soak</h2><figure><img src="somrt1061_conformance_report_img/soak_rate.png" alt="Soak rate"><figcaption>Delivery rate stability over 60 s per version</figcaption></figure></section>
+  <section>
+    <h2>Conformance results</h2>
+    <p class="note">Durations include intentional waits (keep-alive expiry, retained-delete settling).</p>
+    <table>
+      <thead>
+        <tr><th>Test</th><th>MQTT 3.1.1</th><th>Duration</th><th>MQTT 5</th><th>Duration</th></tr>
+      </thead>
+      <tbody><tr><td>CONNECT / CONNACK wire format</td><td class="pass">PASS</td><td class="num">1.5 ms</td><td class="pass">PASS</td><td class="num">1.1 ms</td></tr>
+<tr><td>PINGREQ / PINGRESP</td><td class="pass">PASS</td><td class="num">1.3 ms</td><td class="pass">PASS</td><td class="num">1.2 ms</td></tr>
+<tr><td>QoS 0 publish and subscribe</td><td class="pass">PASS</td><td class="num">2.6 ms</td><td class="pass">PASS</td><td class="num">2.6 ms</td></tr>
+<tr><td>QoS 1 publish with PUBACK format check</td><td class="pass">PASS</td><td class="num">2.7 ms</td><td class="pass">PASS</td><td class="num">2.5 ms</td></tr>
+<tr><td>QoS 2 four-packet handshake, both directions</td><td class="pass">PASS</td><td class="num">1.0 s</td><td class="pass">PASS</td><td class="num">1.0 s</td></tr>
+<tr><td>Retained message: set, deliver, delete</td><td class="pass">PASS</td><td class="num">1.6 s</td><td class="pass">PASS</td><td class="num">1.6 s</td></tr>
+<tr><td>Will published on abrupt disconnect</td><td class="pass">PASS</td><td class="num">17.3 ms</td><td class="pass">PASS</td><td class="num">2.9 ms</td></tr>
+<tr><td>Wildcard filters (`+` and `#`)</td><td class="pass">PASS</td><td class="num">3.0 ms</td><td class="pass">PASS</td><td class="num">3.0 ms</td></tr>
+<tr><td>UNSUBSCRIBE stops delivery</td><td class="pass">PASS</td><td class="num">1.0 s</td><td class="pass">PASS</td><td class="num">1.0 s</td></tr>
+<tr><td>Session persistence across reconnect</td><td class="pass">PASS</td><td class="num">1.0 s</td><td class="pass">PASS</td><td class="num">1.0 s</td></tr>
+<tr><td>Keep-alive enforcement (1.5× timeout)</td><td class="pass">PASS</td><td class="num">6.5 s</td><td class="pass">PASS</td><td class="num">6.5 s</td></tr>
+<tr><td>4 KB payload integrity</td><td class="pass">PASS</td><td class="num">5.0 ms</td><td class="pass">PASS</td><td class="num">4.9 ms</td></tr></tbody>
+    </table>
+  </section>
+  
+<section>
+  <h2>Cross-version interoperability</h2>
+  <table>
+    <thead><tr><th>Scenario</th><th>Status</th><th>Duration</th></tr></thead>
+    <tbody><tr><td>MQTT 5 publisher → 3.1.1 subscriber (properties stripped)</td><td class="pass">PASS</td><td class="num">2.5 ms</td></tr>
+<tr><td>3.1.1 publisher → MQTT 5 subscriber</td><td class="pass">PASS</td><td class="num">2.6 ms</td></tr>
+<tr><td>Retained by MQTT 5, consumed by 3.1.1</td><td class="pass">PASS</td><td class="num">317.6 ms</td></tr>
+<tr><td>QoS 1 delivery across versions</td><td class="pass">PASS</td><td class="num">2.8 ms</td></tr></tbody>
+  </table>
+</section>
+  <section class="charts">
+    <h2>Performance benchmarks</h2>
+    <figure><img src="somrt1061_conformance_report_img/throughput.png" alt="Throughput"><figcaption>Sustained throughput — 60 s soak, 1,310,593 messages, QoS 0</figcaption></figure>
+    <figure><img src="somrt1061_conformance_report_img/latency.png" alt="Latency"><figcaption>Round-trip latency — p50 0.3 ms (3.1.1), 0.3 ms (MQTT 5)</figcaption></figure>
+  </section>
+</body>
+</html>

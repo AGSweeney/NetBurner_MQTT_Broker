@@ -122,6 +122,24 @@ On Windows, the helper script runs the same suite with assert-dialog suppression
 
 ## Device Verification
 
+### Live device conformance EXE (no Python/Node)
+
+Build a standalone Windows executable that runs the full dual-version conformance suite, benchmarks, and optional soak against a flashed module:
+
+```powershell
+cd libs\mqtt_broker
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --target mqtt_device_suite
+```
+
+Run (defaults to `172.16.82.8:1883`):
+
+```powershell
+.\build\tools\device_suite\Release\mqtt_device_suite.exe --host 172.16.82.8 --soak-seconds 3600
+```
+
+Writes `mqtt_conformance_results.json` (same schema as the Python suite) for report generation. Use `--help` for all options.
+
 After flashing and connecting the module to your network, run scripts from `platforms/netburner/scripts/`. Pass the device IP as the first argument (scripts default to `172.16.82.8`).
 
 ```bash

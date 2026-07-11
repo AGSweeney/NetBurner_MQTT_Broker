@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MQTT Broker — Platform Comparison</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --surface: #fff; --text: #1a1d21; --muted: #5c6570;
+    --border: #d8dee4; --pass: #137333; --accent: #0550ae;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.25rem 3rem; font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55; max-width: 980px; margin-inline: auto;
+  }
+  h1 { font-size: 1.65rem; margin: 0 0 0.35rem; }
+  .meta { color: var(--muted); margin-bottom: 1.25rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.65rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1rem 0 0.5rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 0.88rem; }
+  th, td { padding: 0.5rem 0.65rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #eef1f4; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.pass { color: var(--pass); font-weight: 600; }
+  figure { margin: 1rem 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.65rem; }
+  figure img { width: 100%; height: auto; display: block; border-radius: 4px; }
+  figcaption { font-size: 0.82rem; color: var(--muted); margin-top: 0.45rem; text-align: center; }
+  .specs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.55rem 1rem; margin-bottom: 1rem; }
+  .spec-item { font-size: 0.88rem; }
+  .spec-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .spec-value { margin-top: 0.1rem; }
+  ul { padding-left: 1.2rem; }
+</style>
+</head>
+<body>
+  <h1>MQTT Broker — Platform Comparison</h1>
+  <p class="meta">60 s soak per version · 500 burst · 20 latency samples · QoS 0 · Generated 2026-07-11</p>
+  <figure><img src="platform_comparison_summary_img/platform_soak.png" alt="Soak throughput"><figcaption>Sustained soak throughput by platform</figcaption></figure>
+  <figure><img src="platform_comparison_summary_img/platform_latency.png" alt="Latency"><figcaption>Round-trip latency p50 by platform</figcaption></figure>
+  <h2>Summary</h2>
+  <table>
+    <thead><tr><th>Platform</th><th>Host</th><th>CPU</th><th>Clock</th><th>Tests</th>
+    <th>Soak 3.1.1</th><th>Soak MQTT 5</th><th>Latency p50</th><th>Health</th><th>Report</th></tr></thead>
+    <tbody><tr><td><strong>SOMRT1061</strong></td><td><code>172.16.82.8</code></td><td>NXP i.MX RT1061 (Arm Cortex-M7)</td><td>528 MHz</td><td class="pass">28/28</td><td class="num">11,084 msg/s</td><td class="num">10,758 msg/s</td><td class="num">0.3 / 0.3 ms</td><td>0 issues</td><td><a href="somrt1061_conformance_report.html">View</a></td></tr><tr><td><strong>MODM7AE70</strong></td><td><code>172.16.82.52</code></td><td>Microchip SAM E70 (Arm Cortex-M7)</td><td>300 MHz</td><td class="pass">28/28</td><td class="num">1,244 msg/s</td><td class="num">1,209 msg/s</td><td class="num">0.8 / 0.8 ms</td><td>0 issues</td><td><a href="modm7ae70_conformance_report.html">View</a></td></tr><tr><td><strong>NANO54415</strong></td><td><code>172.16.82.55</code></td><td>Freescale ColdFire MCF54415</td><td>250 MHz</td><td class="pass">28/28</td><td class="num">838 msg/s</td><td class="num">808 msg/s</td><td class="num">1.4 / 1.4 ms</td><td>0 issues</td><td><a href="nano54415_conformance_report.html">View</a></td></tr></tbody>
+  </table>
+  <h2>Hardware &amp; broker limits</h2>
+  <h3>SOMRT1061</h3><div class="specs-grid"><div class="spec-item"><div class="spec-label">CPU</div><div class="spec-value">NXP i.MX RT1061 (Arm Cortex-M7)</div></div><div class="spec-item"><div class="spec-label">Clock</div><div class="spec-value">528 MHz</div></div><div class="spec-item"><div class="spec-label">RAM</div><div class="spec-value">32 MB SDRAM + 1 MB on-chip SRAM</div></div><div class="spec-item"><div class="spec-label">Flash</div><div class="spec-value">8 MB SPI NOR</div></div><div class="spec-item"><div class="spec-label">Network</div><div class="spec-value">Dual 10/100 Ethernet</div></div><div class="spec-item"><div class="spec-label">Broker limits</div><div class="spec-value">32 TCP clients · 192 KB payload pool · 64 KB retained</div></div></div><h3>MODM7AE70</h3><div class="specs-grid"><div class="spec-item"><div class="spec-label">CPU</div><div class="spec-value">Microchip SAM E70 (Arm Cortex-M7)</div></div><div class="spec-item"><div class="spec-label">Clock</div><div class="spec-value">300 MHz</div></div><div class="spec-item"><div class="spec-label">RAM</div><div class="spec-value">8 MB SDRAM + 384 KB on-chip SRAM</div></div><div class="spec-item"><div class="spec-label">Flash</div><div class="spec-value">2 MB embedded NOR</div></div><div class="spec-item"><div class="spec-label">Network</div><div class="spec-value">10/100 Ethernet</div></div><div class="spec-item"><div class="spec-label">Broker limits</div><div class="spec-value">16 TCP clients · 72 KB payload pool · 32 KB retained</div></div></div><h3>NANO54415</h3><div class="specs-grid"><div class="spec-item"><div class="spec-label">CPU</div><div class="spec-value">Freescale ColdFire MCF54415</div></div><div class="spec-item"><div class="spec-label">Clock</div><div class="spec-value">250 MHz</div></div><div class="spec-item"><div class="spec-label">RAM</div><div class="spec-value">64 MB DDR2 SDRAM</div></div><div class="spec-item"><div class="spec-label">Flash</div><div class="spec-value">8 MB parallel NOR</div></div><div class="spec-item"><div class="spec-label">Network</div><div class="spec-value">10/100 Ethernet</div></div><div class="spec-item"><div class="spec-label">Broker limits</div><div class="spec-value">32 TCP clients · 128 KB payload pool · 64 KB retained</div></div></div>
+  <h2>Individual reports</h2>
+  <ul>
+    <li><a href="somrt1061_conformance_report.html">SOMRT1061 @ 172.16.82.8</a></li><li><a href="modm7ae70_conformance_report.html">MODM7AE70 @ 172.16.82.52</a></li><li><a href="nano54415_conformance_report.html">NANO54415 @ 172.16.82.55</a></li>
+  </ul>
+</body>
+</html>
