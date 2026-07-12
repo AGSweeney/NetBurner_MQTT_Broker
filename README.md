@@ -189,6 +189,8 @@ The dashboard polls this endpoint every two seconds.
 
 ## Broker Capabilities
 
+See [docs/broker_scope.md](docs/broker_scope.md) for a full scope note covering supported features, intentional MQTT 5 omissions, and possible future extensions.
+
 ### MQTT 5 (CONNACK)
 
 Advertised to connecting MQTT 5 clients:
