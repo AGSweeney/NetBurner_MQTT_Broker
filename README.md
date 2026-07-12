@@ -2,6 +2,8 @@
 
 An embedded **MQTT broker** (MQTT 3.1.1 and MQTT 5.0) for [NetBurner](https://www.netburner.com) modules. The firmware runs on-device with plain TCP and MQTTS listeners, a web admin UI, optional client authentication, and a portable C++ broker core that can be unit-tested on the host.
 
+See [docs/why.md](docs/why.md) for the production-line background and design intent behind this project.
+
 ## Features
 
 - **MQTT 3.1.1 and MQTT 5.0** — Dual-protocol broker on the same TCP listener; clients negotiate version at CONNECT. MQTT 5 adds CONNECT/CONNACK properties, session expiry, will messages (including DISCONNECT with Will Message), and reason codes. Both versions support QoS 0/1/2 with full handshake, retained messages, and wildcard subscriptions
