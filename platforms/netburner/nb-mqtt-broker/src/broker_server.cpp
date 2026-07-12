@@ -25,7 +25,8 @@
 // socket to a BrokerTransport (read/write/close callbacks) and drives the
 // broker from a single RTOS task: select() for readability, on_readable() for
 // inbound MQTT, tick() for keepalive/session expiry, drain_tx() for outbound
-// frames. Plain and MQTTS listeners are opened independently from config.
+// frames. When TX queues are backed up, read volume is throttled and draining
+// is prioritized so subscribers and the admin web UI stay responsive.
 
 static const int kListenBacklog = 16;
 // Two slots reserved for plain + TLS listen sockets; remainder are client fds.
@@ -146,6 +147,25 @@ static int count_tls_clients()
 static bool is_client_kind(FdKind kind)
 {
     return kind == FdKind::PlainClient || kind == FdKind::TlsClient;
+}
+
+// Round-robin drain_tx; stops early when all client TX queues are empty.
+static void drain_all_clients(int max_passes)
+{
+    for (int pass = 0; pass < max_passes; ++pass) {
+        for (int i = 0; i < kMaxFds; ++i) {
+            if (gFds[i].fd > 0 && is_client_kind(gFds[i].kind)) {
+                uint16_t tid = gFds[i].transport_id;
+                gBroker.drain_tx(tid);
+                if (!gBroker.transport_attached(tid)) {
+                    remove_fd(gFds[i].fd);
+                }
+            }
+        }
+        if (!gBroker.has_pending_tx()) {
+            break;
+        }
+    }
 }
 
 uint32_t gBrokerConnectedCount()
@@ -414,6 +434,22 @@ void BrokerServerTask(void *pd)
                     static_cast<unsigned long>(gBrokerPublishSent()));
         }
 
+        // When outbound queues are backed up, favor delivery over ingress so a
+        // flood publisher cannot fill TX rings (64 read / 8 drain was disconnecting
+        // subscribers and starving lower-priority tasks such as the admin web UI).
+        static const int kMaxReadablePassesNormal = 64;
+        static const int kMaxReadablePassesBacklog = 16;
+        static const int kDrainPassesNormal = 8;
+        static const int kDrainPassesBacklog = 32;
+        const bool tx_backlog = gBroker.has_pending_tx();
+        const int max_read_passes =
+            tx_backlog ? kMaxReadablePassesBacklog : kMaxReadablePassesNormal;
+        const int max_drain_passes =
+            tx_backlog ? kDrainPassesBacklog : kDrainPassesNormal;
+        if (tx_backlog) {
+            drain_all_clients(1);
+        }
+
         for (int i = 0; i < kMaxFds; ++i) {
             int fd = gFds[i].fd;
             if (fd <= 0) {
@@ -457,12 +493,12 @@ void BrokerServerTask(void *pd)
             }
 
             uint16_t tid = gFds[i].transport_id;
-            // Cap reads per fd so a flood publisher cannot starve other clients'
-            // on_readable() — unread PINGREQs were tripping keep-alive (~180s).
-            static const int kMaxReadablePassesPerFd = 64;
+            // Cap reads per fd so one client cannot starve others' on_readable()
+            // (unread PINGREQs were tripping keep-alive ~180s). Limit is tighter
+            // while TX queues are backed up — see tx_backlog above.
             int read_passes = 0;
             while (dataavail(fd) && gBroker.transport_attached(tid) &&
-                   read_passes < kMaxReadablePassesPerFd) {
+                   read_passes < max_read_passes) {
                 gBroker.on_readable(tid);
                 read_passes++;
             }
@@ -484,22 +520,6 @@ void BrokerServerTask(void *pd)
             }
         }
 
-        // Round-robin drain_tx across all clients; multiple passes cover fan-out
-        // publishes where one client's read triggers replies to several others.
-        static const int kDrainPasses = 8;
-        for (int pass = 0; pass < kDrainPasses; ++pass) {
-            for (int i = 0; i < kMaxFds; ++i) {
-                if (gFds[i].fd > 0 && is_client_kind(gFds[i].kind)) {
-                    uint16_t tid = gFds[i].transport_id;
-                    gBroker.drain_tx(tid);
-                    if (!gBroker.transport_attached(tid)) {
-                        remove_fd(gFds[i].fd);
-                    }
-                }
-            }
-            if (!gBroker.has_pending_tx()) {
-                break;
-            }
-        }
+        drain_all_clients(max_drain_passes);
     }
 }

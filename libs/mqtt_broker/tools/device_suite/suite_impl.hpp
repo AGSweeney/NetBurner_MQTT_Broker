@@ -81,6 +81,11 @@ struct Config {
     int bench_count = 5000;
     int lat_count = 200;
     double soak_seconds = 0;
+    bool send_only = false;
+    std::string send_topic = "bench/manual/seq";
+    int send_count = 5000;
+    int send_delay_ms = 0;
+    int mqtt_version = 4;
 };
 
 inline std::string ver_label(int v) { return v == 4 ? "v3.1.1" : "v5"; }
@@ -684,6 +689,52 @@ inline LatencyResult bench_latency(const Config &cfg, int v)
     return r;
 }
 
+inline int run_send_only(const Config &cfg)
+{
+    const int v = (cfg.mqtt_version == 5) ? 5 : 4;
+    const std::string tag = "v" + std::to_string(v);
+    MetricsSnap m0 = fetch_metrics(cfg.host);
+
+    std::cout << "=== Send-only (serialized) ===\n";
+    std::cout << "  MQTT " << ver_label(v) << " publisher -> " << cfg.host << ":" << cfg.port << "\n";
+    std::cout << "  topic: " << cfg.send_topic << "\n";
+    std::cout << "  count: " << cfg.send_count;
+    if (cfg.send_delay_ms > 0) {
+        std::cout << ", delay: " << cfg.send_delay_ms << " ms";
+    }
+    std::cout << "\n";
+    std::cout << "  In another terminal:\n";
+    std::cout << "    mosquitto_sub -h " << cfg.host << " -p " << cfg.port << " -t \""
+              << cfg.send_topic << "\" -v\n";
+    std::cout << "  Payload format: seq=N (monotonic). Press Ctrl+C to stop early.\n\n";
+
+    MqttClient pub(cfg.host, cfg.port, v, "sendonly-" + tag);
+    pub.connect_mqtt();
+    auto t0 = Clock::now();
+    for (int i = 0; i < cfg.send_count; ++i) {
+        const std::string payload = "seq=" + std::to_string(i);
+        pub.publish(cfg.send_topic, bytes(payload));
+        std::cout << "  published " << payload << "\n";
+        if (cfg.send_delay_ms > 0) {
+            sleep_ms(cfg.send_delay_ms);
+        }
+    }
+    const double elapsed_s = std::chrono::duration<double>(Clock::now() - t0).count();
+    pub.disconnect();
+
+    MetricsSnap md = diff_metrics(fetch_metrics(cfg.host), m0);
+    std::cout << "\n  done: " << cfg.send_count << " published in " << std::fixed
+              << std::setprecision(2) << elapsed_s << " s";
+    if (elapsed_s > 0) {
+        std::cout << " (" << static_cast<int>(cfg.send_count / elapsed_s) << "/s)";
+    }
+    std::cout << "\n  broker health_delta: slow_consumer_disconnects="
+              << md.slow_consumer_disconnects << " dropped_quota=" << md.dropped_quota
+              << " pool_exhaustion=" << md.pool_exhaustion << " keepalive_disconnects="
+              << md.keepalive_disconnects << "\n";
+    return 0;
+}
+
 inline SoakResult bench_soak(const Config &cfg, int v, double duration_s)
 {
     const std::string tag = "v" + std::to_string(v);
@@ -889,9 +940,21 @@ inline Config parse_args(int argc, char **argv)
             cfg.lat_count = std::stoi(need("--lat-count"));
         } else if (a == "--soak-seconds") {
             cfg.soak_seconds = std::stod(need("--soak-seconds"));
+        } else if (a == "--send-only") {
+            cfg.send_only = true;
+        } else if (a == "--send-topic") {
+            cfg.send_topic = need("--send-topic");
+        } else if (a == "--send-count") {
+            cfg.send_count = std::stoi(need("--send-count"));
+        } else if (a == "--send-delay-ms") {
+            cfg.send_delay_ms = std::stoi(need("--send-delay-ms"));
+        } else if (a == "--mqtt-version") {
+            cfg.mqtt_version = std::stoi(need("--mqtt-version"));
         } else if (a == "--help" || a == "-h") {
             std::cout << "mqtt_device_suite [--host IP] [--port 1883] [--out results.json]\n"
-                         "  [--bench-count N] [--lat-count N] [--soak-seconds N]\n";
+                         "  [--bench-count N] [--lat-count N] [--soak-seconds N]\n"
+                         "  [--send-only] [--send-topic TOPIC] [--send-count N]\n"
+                         "  [--send-delay-ms N] [--mqtt-version 4|5]\n";
             std::exit(0);
         }
     }
@@ -905,6 +968,12 @@ inline int run_suite(int argc, char **argv)
         return 2;
     }
     Config cfg = parse_args(argc, argv);
+
+    if (cfg.send_only) {
+        const int rc = run_send_only(cfg);
+        socket_shutdown();
+        return rc;
+    }
 
     char started[32];
     std::time_t now = std::time(nullptr);
